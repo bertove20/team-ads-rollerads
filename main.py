@@ -25,6 +25,7 @@ import actions
 import analysis
 import autopause
 import autoscale
+import breakdown
 import checks
 import config
 import dashboard
@@ -145,6 +146,10 @@ async def job_analyst(context: ContextTypes.DEFAULT_TYPE, force: bool = False) -
         return
     storage.put("last_data_error", None)
     storage.put("last_facts", analysis.facts_text(snap))
+    try:  # rincian per negara/device/jam (1 panggilan API, tanpa AI)
+        await breakdown.collect()
+    except Exception:  # noqa: BLE001 - rincian gagal tidak boleh menghentikan laporan
+        log.exception("Rincian negara/device/jam gagal diambil")
     await team.send("analyst", "laporan", analysis.hourly_report(snap))
 
     today = dt.datetime.now(config.TIMEZONE).date().isoformat()
@@ -190,6 +195,10 @@ async def job_daily_report(context: ContextTypes.DEFAULT_TYPE) -> None:
         await team.send(LEADER, "alert", f"Laporan harian gagal dibuat: {e}")
         return
     await team.send(LEADER, "laporan", f"🗓️ Laporan harian\n\n{report}")
+    try:  # usulan dari rincian negara/device/jam (sekali sehari, tetap butuh Setuju Owner)
+        await breakdown.run(team)
+    except Exception:  # noqa: BLE001
+        log.exception("Usulan dari rincian gagal dibuat")
     try:  # rangkum obrolan & laporan hari ini ke ingatan tim
         await memory.consolidate_chat()
     except llm.LLMError as e:
@@ -631,6 +640,7 @@ async def run_dashboard_only() -> None:
             await checks.health_check(team)
             await tracking.monitor(team)
             await watch.run(team)
+            await breakdown.collect()
         except Exception:  # noqa: BLE001 - jangan sampai dashboard ikut mati
             log.exception("Cek landing page gagal")
         await asyncio.sleep(config.HEALTHCHECK_MINUTES * 60)

@@ -18,6 +18,7 @@ import analysis
 import auth
 import autopause
 import bemob
+import breakdown
 import checks
 import config
 import data_source
@@ -372,6 +373,28 @@ async def collect(request: web.Request) -> web.Response:
 async def ltv_view(request: web.Request) -> web.Response:
     data = ltv.report()
     return web.json_response({**data, "token": ltv.token(), "domain": config.DASHBOARD_DOMAIN})
+
+
+@routes.get("/api/breakdown")
+async def breakdown_view(request: web.Request) -> web.Response:
+    """Rincian per negara, device/OS, dan jam (3 hari terakhir) + usulan yang bisa dibuat dari data itu."""
+    rows = lambda group: sorted(({"key": k, **v} for k, v in breakdown.combined(group).items() if v["cost"] > 0),
+                                key=lambda x: -x["cost"])
+    saved = storage.get(breakdown.KEY, {})
+    return web.json_response({
+        "days": sorted(saved) if isinstance(saved, dict) else [],
+        "lookback": breakdown.LOOKBACK,
+        "by_country": rows("country"), "by_os": rows("os"), "by_hour": rows("hour"),
+        "suggestions": [{"type": a["type"], "campaign": a["campaign"], "reason": a["reason"],
+                         "text": meeting.describe_action(a)} for a in breakdown.suggestions()],
+        "has_hour": any((s or {}).get("has_hour") for s in (saved.values() if isinstance(saved, dict) else [])),
+    })
+
+
+@routes.post("/api/breakdown/refresh")
+async def breakdown_refresh(request: web.Request) -> web.Response:
+    data = await breakdown.collect()
+    return web.json_response({"ok": bool(data)})
 
 
 @routes.get("/api/scorecard")

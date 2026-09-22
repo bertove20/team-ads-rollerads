@@ -49,6 +49,8 @@ untuk semua orang.
 | Tiap 15 menit | Sistem (tanpa AI) | Saldo RollerAds menipis, campaign ditolak moderasi / tidak jalan | 🚨 Alert Tracking |
 | Tiap 15 menit | Sistem (tanpa AI) | Rem darurat biaya AI (batas harian) | 🚨 Alert Tracking |
 | Sekali sehari | Tracking Specialist | **Rekonsiliasi konversi** BeMob vs RollerAds (deteksi postback bocor / trafik curang) | 🚨 Alert Tracking |
+| Tiap 1 jam | Sistem (tanpa AI) | Tarik rincian **per negara, device/OS, dan jam** dari RollerAds | – |
+| Sekali sehari | Analyst | Usulan dari rincian itu: matikan jam boros, kecualikan negara/OS rugi | 🎯 Approval |
 
 Semua jadwal bisa diubah di menu Pengaturan pada dashboard (tersimpan di `.env`).
 
@@ -56,6 +58,9 @@ Semua jadwal bisa diubah di menu Pengaturan pada dashboard (tersimpan di `.env`)
 jam tayang, zone harus ada di data) → tombol Setuju/Tolak untuk Owner → jika disetujui **semuanya langsung
 dijalankan lewat RollerAds API**: pause/buat campaign, blacklist & whitelist zone, ubah bid, ubah budget
 harian, atur jam tayang (dayparting), dan frequency capping. Hanya jika API gagal, usulan menjadi tugas manual.
+
+**Melihat penyebab untung-rugi:** menu 🌍 **Negara, Device & Jam** menampilkan spend, konversi, profit, dan ROI
+per negara, per device/OS, dan per jam — plus usulan yang bisa dibuat dari data itu.
 
 **Menilai hasil:** menu 📊 **Rapor Tim** membandingkan angka campaign 3 hari sebelum vs sesudah tiap tindakan,
 jadi terlihat usulan mana yang benar-benar menghasilkan. Menu 👤 **Nilai Pemain** menghitung nilai pemain

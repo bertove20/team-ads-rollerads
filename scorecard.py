@@ -22,7 +22,8 @@ log = logging.getLogger(__name__)
 WINDOW_DAYS = 3        # berapa hari dibandingkan sebelum vs sesudah
 MIN_AGE_HOURS = 24     # tindakan yang lebih baru dari ini belum bisa dinilai
 ACTIONS = memory.IMPACT_ACTIONS | {"whitelist": "whitelist zone", "jam": "atur jam tayang",
-                                   "frekuensi": "frequency cap"}
+                                   "frekuensi": "frequency cap", "negara": "kecualikan negara",
+                                   "device": "kecualikan device"}
 
 
 def _source(entry: dict) -> str:

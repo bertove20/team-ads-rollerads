@@ -325,6 +325,7 @@ details.more summary { cursor: pointer; color: var(--accent); font-size: 14px; m
     <a href="#zone" data-page="zone">🧩 Zone</a>
     <a href="#tren" data-page="tren">📈 Tren</a>
     <a href="#usulan" data-page="usulan">🎯 Usulan &amp; Tugas <span class="count" id="nav-count" hidden></span></a>
+    <a href="#rincian" data-page="rincian">🌍 Negara, Device &amp; Jam</a>
     <a href="#ltv" data-page="ltv">👤 Nilai Pemain</a>
     <a href="#rapor" data-page="rapor">📊 Rapor Tim</a>
     <a href="#rapat" data-page="rapat">💬 Rapat &amp; Laporan</a>
@@ -519,6 +520,33 @@ details.more summary { cursor: pointer; color: var(--accent); font-size: 14px; m
       <div class="card">
         <h2>Riwayat usulan</h2>
         <div class="table-wrap"><table id="tb-proposals"></table></div>
+      </div>
+    </section>
+
+    <!-- ================= RINCIAN NEGARA / DEVICE / JAM ================= -->
+    <section class="page" id="page-rincian">
+      <p class="page-intro">Di sinilah sebagian besar untung-rugi ditentukan: <b>negara mana</b> yang menghasilkan,
+        <b>device apa</b> yang boros, dan <b>jam berapa</b> uang terbuang. Data ditarik otomatis dari RollerAds tiap jam.
+        Tim memakai halaman ini untuk mengusulkan: matikan jam boros, kecualikan negara/OS yang rugi.</p>
+      <div class="toolbar">
+        <button class="btn" id="bd-refresh">🔄 Ambil data sekarang</button>
+        <span class="sub" id="bd-info" style="margin:0"></span>
+      </div>
+      <div id="bd-suggestions"></div>
+      <div class="card">
+        <h2>Per negara</h2>
+        <div class="table-wrap"><table id="tb-bd-country"></table></div>
+      </div>
+      <div class="grid two">
+        <div class="card">
+          <h2>Per device / OS</h2>
+          <div class="table-wrap"><table id="tb-bd-os"></table></div>
+        </div>
+        <div class="card">
+          <h2>Per jam</h2>
+          <p class="sub">Waktu mengikuti akun RollerAds. Jam merah = boros.</p>
+          <div class="table-wrap"><table id="tb-bd-hour"></table></div>
+        </div>
       </div>
     </section>
 
@@ -967,7 +995,7 @@ function divergingBar(id, labels, values, label, horizontal = false) {
 // ============================================================ state & routing
 const TITLES = {
   ringkasan: "Ringkasan", campaign: "Campaign", rollerads: "RollerAds", zone: "Zone", tren: "Tren", usulan: "Usulan & Tugas",
-  ltv: "Nilai Pemain", rapor: "Rapor Tim", rapat: "Rapat & Laporan", tanya: "Tanya Tim", ingatan: "Ingatan Tim", tracking: "Script Tracking", lp: "Landing Page", biaya: "Biaya AI", pengaturan: "Pengaturan",
+  rincian: "Negara, Device & Jam", ltv: "Nilai Pemain", rapor: "Rapor Tim", rapat: "Rapat & Laporan", tanya: "Tanya Tim", ingatan: "Ingatan Tim", tracking: "Script Tracking", lp: "Landing Page", biaya: "Biaya AI", pengaturan: "Pengaturan",
   bantuan: "Bantuan",
 };
 let current = "ringkasan";
@@ -1210,7 +1238,8 @@ PAGES.rollerads = async () => {
 
   const ACT = {paused: ["warning", "Pause"], active: ["good", "Aktifkan"], created: ["info", "Dibuat"],
     blacklist: ["warning", "Blacklist zone"], bid: ["info", "Ubah bid"], budget: ["info", "Ubah budget"],
-    whitelist: ["good", "Whitelist zone"], jam: ["info", "Jam tayang"], frekuensi: ["info", "Frequency cap"]};
+    whitelist: ["good", "Whitelist zone"], jam: ["info", "Jam tayang"], frekuensi: ["info", "Frequency cap"],
+    negara: ["warning", "Kecualikan negara"], device: ["warning", "Kecualikan device"]};
   $("#tb-ra-log").innerHTML = d.log.length ? `<thead><tr><th>Waktu</th><th>Campaign</th><th>Tindakan</th><th>Oleh / alasan</th></tr></thead>
     <tbody>${d.log.map(l => `<tr><td>${timeFmt(l.ts)}</td><td>${esc(l.title)}</td>
       <td><span class="badge ${(ACT[l.action] || [""])[0]}">${(ACT[l.action] || ["", esc(l.action)])[1]}</span></td>
@@ -1389,6 +1418,44 @@ PAGES.usulan = async () => {
     await refresh();
   }));
 };
+
+function bdTable(rows, label, fmt = (k) => k) {
+  if (!rows.length) return `<tbody><tr><td class="empty">Belum ada data. Klik "Ambil data sekarang".</td></tr></tbody>`;
+  const total = rows.reduce((s, r) => s + r.cost, 0) || 1;
+  return `<thead><tr><th>${label}</th><th class="num">Klik</th><th class="num">Konversi</th><th class="num">Spend</th>
+    <th class="num">Profit</th><th class="num">ROI</th><th class="num">CPA</th><th class="num">Porsi spend</th></tr></thead>
+    <tbody>${rows.map(r => {
+      const rugi = r.conversions === 0 || (r.roi !== null && r.roi < 0);
+      return `<tr><td><b>${esc(fmt(r.key))}</b></td><td class="num">${num(r.clicks)}</td>
+        <td class="num">${num(r.conversions)}</td><td class="num">${money(r.cost)}</td>
+        <td class="num ${r.profit >= 0 ? "up" : "down"}">${money(r.profit)}</td>
+        <td class="num ${rugi ? "down" : "up"}">${r.roi === null ? "–" : r.roi.toFixed(0) + "%"}</td>
+        <td class="num">${r.cpa === null ? "–" : money(r.cpa)}</td>
+        <td class="num">${(r.cost / total * 100).toFixed(0)}%</td></tr>`;
+    }).join("")}</tbody>`;
+}
+
+PAGES.rincian = async () => {
+  const d = await api("/api/breakdown");
+  $("#bd-info").textContent = d.days.length
+    ? `Gabungan ${d.lookback} hari terakhir · data tersimpan: ${d.days.length} hari (${d.days[0]} s/d ${d.days[d.days.length - 1]})`
+    : "Belum ada data tersimpan. Butuh RollerAds API aktif.";
+  $("#bd-suggestions").innerHTML = d.suggestions.length
+    ? `<div class="banner warning"><strong>Usulan siap dikirim ke Anda</strong>
+       <ul style="margin:4px 0 0;padding-left:18px">${d.suggestions.map(s => `<li>${esc(s.text.split("\n")[0])} — <span class="sub" style="margin:0">${esc(s.reason)}</span></li>`).join("")}</ul>
+       Usulan ini dikirim otomatis dengan tombol Setuju/Tolak setelah laporan harian.</div>`
+    : `<div class="banner info"><strong>Tidak ada pemborosan mencolok</strong>Belum ada negara, device, atau jam yang boros melebihi batas pengaman.</div>`;
+  $("#tb-bd-country").innerHTML = bdTable(d.by_country, "Negara");
+  $("#tb-bd-os").innerHTML = bdTable(d.by_os, "Device / OS");
+  $("#tb-bd-hour").innerHTML = d.has_hour
+    ? bdTable([...d.by_hour].sort((a, b) => (+a.key) - (+b.key)), "Jam", (k) => `${String(k).padStart(2, "0")}:00`)
+    : `<tbody><tr><td class="empty">RollerAds belum mengirim rincian jam untuk akun ini.</td></tr></tbody>`;
+};
+$("#bd-refresh").onclick = e => withBusy(e.currentTarget, async () => {
+  const r = await api("/api/breakdown/refresh", {method: "POST"});
+  toast(r.ok ? "🌍 Data rincian diperbarui." : "Belum ada data dari RollerAds (cek API key & campaign aktif).");
+  await PAGES.rincian();
+});
 
 function ltvRow(r, first) {
   const d = (v) => v === null || v === undefined ? "–" : money(v);

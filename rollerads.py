@@ -167,6 +167,15 @@ async def set_dayparting(campaign_id: int, hours: list[int], timezone: str = "UT
     had_geo = "geo" in targetings
     targetings["dayTime"] = {"targeting_type": "dayTime", "targeting_value": {
         "days": {str(d): wanted for d in range(1, 8)}, "def": False, "timezone": timezone}}
+    after = await _save_targeting(campaign_id, before, targetings, "jam tayang")
+    if had_geo and "geo" not in (after.get("targetings") or {}):
+        raise RollerAdsError("Targeting negara hilang setelah mengatur jam tayang. Periksa campaign di panel "
+                             "RollerAds sekarang juga.")
+    return after
+
+
+async def _save_targeting(campaign_id: int, before: dict, targetings: dict, what: str) -> dict:
+    """Simpan targeting hasil gabungan lalu pastikan tidak ada yang hilang tanpa sengaja."""
     await call("POST", f"/campaigns/{campaign_id}", fields={
         "campaign": {
             "campaign_title": before["campaign_title"],
@@ -176,10 +185,56 @@ async def set_dayparting(campaign_id: int, hours: list[int], timezone: str = "UT
         "targetings": targetings,
     })
     after = await detail(campaign_id)
-    if had_geo and "geo" not in (after.get("targetings") or {}):
-        raise RollerAdsError("Targeting negara hilang setelah mengatur jam tayang. Periksa campaign di panel "
-                             "RollerAds sekarang juga.")
+    missing = set(_targetings_of(before)) - set(after.get("targetings") or {})
+    if missing:
+        raise RollerAdsError(f"Targeting {', '.join(sorted(missing))} hilang setelah mengubah {what}. "
+                             "Periksa campaign di panel RollerAds sekarang juga.")
     return after
+
+
+async def exclude_countries(campaign_id: int, iso2: list[str]) -> list[str]:
+    """Hentikan iklan di negara tertentu. Negara lain tetap jalan; tidak boleh sampai kosong."""
+    wanted = {c.strip().upper() for c in iso2 if c.strip()}
+    known = await countries()
+    ids = {known[c] for c in wanted if c in known}
+    if not ids:
+        raise RollerAdsError(f"Kode negara tidak dikenal: {', '.join(sorted(wanted))}")
+    before = await detail(campaign_id)
+    targetings = _targetings_of(before)
+    geo = (targetings.get("geo") or {}).get("targeting_value") or {}
+    current = [int(c) for c in (geo.get("country") or [])]
+    if not geo.get("countryType", True):
+        raise RollerAdsError("Campaign ini memakai daftar negara yang DILARANG (bukan diizinkan). "
+                             "Ubah manual di panel RollerAds supaya tidak salah.")
+    kept = [c for c in current if c not in ids]
+    if current and not kept:
+        raise RollerAdsError("Semua negara akan tereksklusi. Pause campaign saja kalau semua negara rugi.")
+    if not current:
+        raise RollerAdsError("Campaign ini menargetkan semua negara; pengecualian per negara harus diatur manual.")
+    targetings["geo"] = {"targeting_type": "geo", "targeting_value": {**geo, "country": kept, "countryType": True}}
+    await _save_targeting(campaign_id, before, targetings, "negara")
+    by_id = {v: k for k, v in known.items()}
+    return sorted(by_id.get(i, str(i)) for i in ids if i in current)
+
+
+async def exclude_os(campaign_id: int, families: list[str]) -> list[str]:
+    """Hentikan iklan di sistem operasi tertentu (mis. iOS). Hanya bisa jika campaign memang membatasi OS."""
+    wanted = {o.strip() for o in families if o.strip()}
+    before = await detail(campaign_id)
+    targetings = _targetings_of(before)
+    device = (targetings.get("device") or {}).get("targeting_value") or {}
+    current = [str(o) for o in (device.get("os") or [])]
+    if not current:
+        raise RollerAdsError("Campaign ini menargetkan semua OS; pengecualian OS harus diatur manual di panel "
+                             "RollerAds (pilih OS yang diizinkan).")
+    kept = [o for o in current if o.lower() not in {w.lower() for w in wanted}]
+    if not kept:
+        raise RollerAdsError("Semua OS akan tereksklusi. Pause campaign saja kalau semua OS rugi.")
+    targetings["device"] = {"targeting_type": "device", "targeting_value": {
+        "os": kept, "osVersion": device.get("osVersion") or [], "type": device.get("type") or [],
+        "def": device.get("def", False)}}
+    await _save_targeting(campaign_id, before, targetings, "device/OS")
+    return sorted(set(current) - set(kept))
 
 
 async def set_freq_cap(campaign_id: int, impressions: int, hours: int) -> dict:

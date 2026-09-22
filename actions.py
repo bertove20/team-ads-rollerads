@@ -4,6 +4,7 @@ import logging
 import time
 
 import autopause
+import breakdown
 import config
 import landing
 import llm
@@ -56,7 +57,8 @@ def results_text() -> str:
 
 def progress_text() -> str:
     """Status tracking, landing page, nilai pemain, dan rapor hasil tindakan tim."""
-    return "\n\n".join(filter(None, [tracking.status_text(), landing.status_text(), ltv.text(), scorecard.text(5)]))
+    return "\n\n".join(filter(None, [breakdown.text(), tracking.status_text(), landing.status_text(),
+                                     ltv.text(), scorecard.text(5)]))
 
 
 def open_tasks_text() -> str:
@@ -133,7 +135,7 @@ async def _execute(team: Team, proposal_id: int, action: dict) -> bool:
             return False
         return True
     if action["type"] in ("blacklist_zones", "whitelist_zones", "change_bid", "change_daily_budget",
-                          "set_dayparting", "set_freq_cap"):
+                          "set_dayparting", "set_freq_cap", "exclude_country", "exclude_os"):
         try:
             return await _apply_change(team, proposal_id, action)
         except rollerads.RollerAdsError as e:
@@ -170,6 +172,22 @@ async def _apply_change(team: Team, proposal_id: int, action: dict) -> bool:
         await team.send("media_buyer", "approval", f"🕒 Jam tayang {name} (#{cid}) diatur: hanya jam "
                         + ", ".join(f"{h:02d}" for h in hours) + f" waktu {config.TIMEZONE}. "
                         f"Targeting lain tetap utuh (moderasi: {after.get('campaign_moderation', '-')}).")
+        return True
+
+    if kind == "exclude_country":
+        done = await rollerads.exclude_countries(cid, action.get("values") or [])
+        autopause.record({"campaign_id": cid, "title": name, "action": "negara",
+                          "reason": "dikecualikan: " + ", ".join(done), "by": who})
+        await team.send("media_buyer", "approval", f"🌍 {name} (#{cid}) tidak lagi tayang di: {', '.join(done)}. "
+                        "Negara lain tetap jalan. Spend akan turun; pantau apakah profitnya membaik.")
+        return True
+
+    if kind == "exclude_os":
+        done = await rollerads.exclude_os(cid, action.get("values") or [])
+        autopause.record({"campaign_id": cid, "title": name, "action": "device",
+                          "reason": "dikecualikan: " + ", ".join(done), "by": who})
+        await team.send("media_buyer", "approval", f"📱 {name} (#{cid}) tidak lagi tayang di device/OS: "
+                        f"{', '.join(done)}. OS lain tetap jalan.")
         return True
 
     if kind == "set_freq_cap":
