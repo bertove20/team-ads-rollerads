@@ -174,6 +174,74 @@ async def set_dayparting(campaign_id: int, hours: list[int], timezone: str = "UT
     return after
 
 
+def creatives_of(detail_data: dict) -> list[dict]:
+    """Daftar creative campaign (judul, deskripsi, gambar, status)."""
+    return [c for c in (detail_data.get("creative") or []) if isinstance(c, dict)]
+
+
+def _creative_payload(c: dict) -> dict:
+    """Bentuk creative untuk dikirim balik ke API tanpa mengunggah ulang gambar."""
+    return {"creative_id": c["creative_id"], "creative_title": c.get("creative_title") or "",
+            "creative_descr": c.get("creative_descr") or "", "image_360": True, "image_192": True}
+
+
+async def keep_creatives(campaign_id: int, keep_ids: list[int]) -> list[int]:
+    """Sisakan hanya creative ini (yang lain dihentikan). Minimal satu harus tersisa."""
+    before = await detail(campaign_id)
+    current = creatives_of(before)
+    keep = [c for c in current if int(c["creative_id"]) in {int(i) for i in keep_ids}]
+    if not keep:
+        raise RollerAdsError("Minimal satu creative harus tetap ada. Pause campaign saja kalau semuanya jelek.")
+    if len(keep) == len(current):
+        return [int(c["creative_id"]) for c in keep]
+    await call("POST", f"/campaigns/{campaign_id}", fields={
+        "campaign": {"campaign_title": before["campaign_title"],
+                     "campaign_url_target": before["campaign_url_target"],
+                     "campaign_bid": before["campaign_bid"]},
+        "creatives": [_creative_payload(c) for c in keep],
+    })
+    after = {int(c["creative_id"]) for c in creatives_of(await detail(campaign_id))}
+    kept = {int(c["creative_id"]) for c in keep}
+    if not kept <= after:
+        raise RollerAdsError("Creative yang seharusnya dipertahankan ikut hilang. Periksa campaign di panel "
+                             "RollerAds sekarang juga.")
+    return sorted(after)
+
+
+async def add_creative(campaign_id: int, title: str, descr: str, image_360: str, image_192: str = "") -> int:
+    """Tambah creative baru (judul & teks baru, gambar memakai URL yang sudah ada). Mengembalikan jumlah creative."""
+    before = await detail(campaign_id)
+    current = creatives_of(before)
+    if not image_360:
+        raise RollerAdsError("Creative baru butuh gambar 360x240. Tidak ada gambar yang bisa dipakai ulang.")
+    baru = {"creative_title": title[:64], "creative_descr": descr[:128], "image_360": image_360}
+    if image_192:
+        baru["image_192"] = image_192
+    await call("POST", f"/campaigns/{campaign_id}", fields={
+        "campaign": {"campaign_title": before["campaign_title"],
+                     "campaign_url_target": before["campaign_url_target"],
+                     "campaign_bid": before["campaign_bid"]},
+        "creatives": [_creative_payload(c) for c in current] + [baru],
+    })
+    after = creatives_of(await detail(campaign_id))
+    if len(after) <= len(current):
+        raise RollerAdsError("Creative baru tidak muncul di campaign. Cek moderasi/format di panel RollerAds.")
+    return len(after)
+
+
+async def set_zone_bids(campaign_id: int, zones: list[str], bid: float) -> list[int]:
+    """Bid khusus untuk zone tertentu (CPC/CPM tetap, tidak diubah algoritma RollerAds)."""
+    ids = sorted({int(z) for z in zones if str(z).isdigit()})
+    if not ids:
+        raise RollerAdsError("Tidak ada ID zone yang valid.")
+    if bid <= 0 or bid > config.CAMPAIGN_MAX_BID_USD:
+        raise RollerAdsError(f"Bid zone ${bid:g} di luar batas pengaman (maks ${config.CAMPAIGN_MAX_BID_USD:g}).")
+    await detail(campaign_id)
+    await call("POST", f"/campaigns/{campaign_id}/custom-bid",
+               body={"bids": [{"campaign_bid": round(bid, 4), "zone_id": ids}]})
+    return ids
+
+
 async def _save_targeting(campaign_id: int, before: dict, targetings: dict, what: str) -> dict:
     """Simpan targeting hasil gabungan lalu pastikan tidak ada yang hilang tanpa sengaja."""
     await call("POST", f"/campaigns/{campaign_id}", fields={

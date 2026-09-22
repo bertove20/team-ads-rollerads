@@ -537,6 +537,12 @@ details.more summary { cursor: pointer; color: var(--accent); font-size: 14px; m
         <h2>Per negara</h2>
         <div class="table-wrap"><table id="tb-bd-country"></table></div>
       </div>
+      <div class="card">
+        <h2>🎨 Per creative (judul iklan)</h2>
+        <p class="sub">CTR tinggi tetapi konversi nol = judulnya menarik tapi menipu harapan. Creative boros diusulkan dihentikan,
+          dan variasi baru ditulis tim Creative memakai gambar pemenang.</p>
+        <div class="table-wrap"><table id="tb-bd-creative"></table></div>
+      </div>
       <div class="grid two">
         <div class="card">
           <h2>Per device / OS</h2>
@@ -1239,7 +1245,8 @@ PAGES.rollerads = async () => {
   const ACT = {paused: ["warning", "Pause"], active: ["good", "Aktifkan"], created: ["info", "Dibuat"],
     blacklist: ["warning", "Blacklist zone"], bid: ["info", "Ubah bid"], budget: ["info", "Ubah budget"],
     whitelist: ["good", "Whitelist zone"], jam: ["info", "Jam tayang"], frekuensi: ["info", "Frequency cap"],
-    negara: ["warning", "Kecualikan negara"], device: ["warning", "Kecualikan device"]};
+    negara: ["warning", "Kecualikan negara"], device: ["warning", "Kecualikan device"],
+    bid_zone: ["info", "Bid khusus zone"], creative: ["info", "Creative"]};
   $("#tb-ra-log").innerHTML = d.log.length ? `<thead><tr><th>Waktu</th><th>Campaign</th><th>Tindakan</th><th>Oleh / alasan</th></tr></thead>
     <tbody>${d.log.map(l => `<tr><td>${timeFmt(l.ts)}</td><td>${esc(l.title)}</td>
       <td><span class="badge ${(ACT[l.action] || [""])[0]}">${(ACT[l.action] || ["", esc(l.action)])[1]}</span></td>
@@ -1445,7 +1452,19 @@ PAGES.rincian = async () => {
        <ul style="margin:4px 0 0;padding-left:18px">${d.suggestions.map(s => `<li>${esc(s.text.split("\n")[0])} — <span class="sub" style="margin:0">${esc(s.reason)}</span></li>`).join("")}</ul>
        Usulan ini dikirim otomatis dengan tombol Setuju/Tolak setelah laporan harian.</div>`
     : `<div class="banner info"><strong>Tidak ada pemborosan mencolok</strong>Belum ada negara, device, atau jam yang boros melebihi batas pengaman.</div>`;
+  const t = d.target_cpa || {};
+  if (t.value) $("#bd-info").textContent += ` · target CPA ${money(t.value)}`;
   $("#tb-bd-country").innerHTML = bdTable(d.by_country, "Negara");
+  $("#tb-bd-creative").innerHTML = d.creatives.length ? `<thead><tr><th>Campaign · creative</th><th class="num">Tayang</th>
+    <th class="num">Klik</th><th class="num">CTR</th><th class="num">Konversi</th><th class="num">CR</th>
+    <th class="num">Spend</th><th class="num">Profit</th></tr></thead>
+    <tbody>${d.creatives.map(c => `<tr><td><b>${esc(c.key.replace("|", " · #"))}</b></td>
+      <td class="num">${num(c.impressions)}</td><td class="num">${num(c.clicks)}</td>
+      <td class="num">${c.ctr === null ? "–" : c.ctr.toFixed(2) + "%"}</td>
+      <td class="num">${num(c.conversions)}</td><td class="num">${c.cr === null ? "–" : c.cr.toFixed(1) + "%"}</td>
+      <td class="num">${money(c.cost)}</td>
+      <td class="num ${c.profit >= 0 ? "up" : "down"}">${money(c.profit)}</td></tr>`).join("")}</tbody>`
+    : `<tbody><tr><td class="empty">Belum ada data creative. Hanya untuk format push, in-page push, dan native.</td></tr></tbody>`;
   $("#tb-bd-os").innerHTML = bdTable(d.by_os, "Device / OS");
   $("#tb-bd-hour").innerHTML = d.has_hour
     ? bdTable([...d.by_hour].sort((a, b) => (+a.key) - (+b.key)), "Jam", (k) => `${String(k).padStart(2, "0")}:00`)

@@ -51,6 +51,9 @@ untuk semua orang.
 | Sekali sehari | Tracking Specialist | **Rekonsiliasi konversi** BeMob vs RollerAds (deteksi postback bocor / trafik curang) | 🚨 Alert Tracking |
 | Tiap 1 jam | Sistem (tanpa AI) | Tarik rincian **per negara, device/OS, dan jam** dari RollerAds | – |
 | Sekali sehari | Analyst | Usulan dari rincian itu: matikan jam boros, kecualikan negara/OS rugi | 🎯 Approval |
+| Tiap 1 jam | Sistem (tanpa AI) | Tarik performa **per creative** (judul iklan) dari RollerAds | – |
+| Sekali sehari | Creative | Usulan creative: hentikan yang boros, tulis variasi baru dari pemenang | 🎯 Approval |
+| Tiap 15 menit | Sistem (tanpa AI) | Usulan **bid khusus** untuk zone yang terbukti untung | 🎯 Approval |
 
 Semua jadwal bisa diubah di menu Pengaturan pada dashboard (tersimpan di `.env`).
 
@@ -61,6 +64,9 @@ harian, atur jam tayang (dayparting), dan frequency capping. Hanya jika API gaga
 
 **Melihat penyebab untung-rugi:** menu 🌍 **Negara, Device & Jam** menampilkan spend, konversi, profit, dan ROI
 per negara, per device/OS, dan per jam — plus usulan yang bisa dibuat dari data itu.
+
+**Target CPA otomatis:** dari nilai pemain (LTV) sistem menghitung CPA maksimal yang masih untung, lalu
+memakainya untuk auto-pause, auto-scale, dan penilaian zone/negara/jam/creative. Tidak lagi menebak.
 
 **Menilai hasil:** menu 📊 **Rapor Tim** membandingkan angka campaign 3 hari sebelum vs sesudah tiap tindakan,
 jadi terlihat usulan mana yang benar-benar menghasilkan. Menu 👤 **Nilai Pemain** menghitung nilai pemain

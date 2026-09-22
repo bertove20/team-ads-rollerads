@@ -6,6 +6,7 @@ import time
 import autopause
 import breakdown
 import config
+import creatives
 import landing
 import llm
 import ltv
@@ -14,6 +15,7 @@ import memory
 import rollerads
 import scorecard
 import storage
+import targets
 import tracking
 from agents import AGENTS, LEADER
 from telegram_team import Team
@@ -57,8 +59,8 @@ def results_text() -> str:
 
 def progress_text() -> str:
     """Status tracking, landing page, nilai pemain, dan rapor hasil tindakan tim."""
-    return "\n\n".join(filter(None, [breakdown.text(), tracking.status_text(), landing.status_text(),
-                                     ltv.text(), scorecard.text(5)]))
+    return "\n\n".join(filter(None, [targets.text(), breakdown.text(), creatives.text(), tracking.status_text(),
+                                     landing.status_text(), ltv.text(), scorecard.text(5)]))
 
 
 def open_tasks_text() -> str:
@@ -135,7 +137,8 @@ async def _execute(team: Team, proposal_id: int, action: dict) -> bool:
             return False
         return True
     if action["type"] in ("blacklist_zones", "whitelist_zones", "change_bid", "change_daily_budget",
-                          "set_dayparting", "set_freq_cap", "exclude_country", "exclude_os"):
+                          "set_dayparting", "set_freq_cap", "exclude_country", "exclude_os", "zone_bid",
+                          "pause_creative", "new_creative"):
         try:
             return await _apply_change(team, proposal_id, action)
         except rollerads.RollerAdsError as e:
@@ -172,6 +175,52 @@ async def _apply_change(team: Team, proposal_id: int, action: dict) -> bool:
         await team.send("media_buyer", "approval", f"🕒 Jam tayang {name} (#{cid}) diatur: hanya jam "
                         + ", ".join(f"{h:02d}" for h in hours) + f" waktu {config.TIMEZONE}. "
                         f"Targeting lain tetap utuh (moderasi: {after.get('campaign_moderation', '-')}).")
+        return True
+
+    if kind == "zone_bid":
+        bid = float(action["new_value"])
+        done = await rollerads.set_zone_bids(cid, action["zones"], bid)
+        autopause.record({"campaign_id": cid, "title": name, "action": "bid_zone",
+                          "reason": f"${bid:g} untuk {len(done)} zone", "by": who})
+        await team.send("media_buyer", "approval", f"🎯 Bid khusus ${bid:g} dipasang untuk {len(done)} zone di {name} "
+                        f"(#{cid}): {', '.join(map(str, done[:10]))}. Zone lain tetap memakai bid campaign.")
+        return True
+
+    if kind == "pause_creative":
+        keep = [int(z) for z in (action.get("zones") or []) if str(z).isdigit()]
+        stop = [str(v) for v in (action.get("values") or [])]
+        if not keep:  # rapat tidak menyebut yang dipertahankan: hitung dari daftar creative sekarang
+            current = rollerads.creatives_of(await rollerads.detail(cid))
+            keep = [int(c["creative_id"]) for c in current if str(c["creative_id"]) not in stop]
+        left = await rollerads.keep_creatives(cid, keep)
+        autopause.record({"campaign_id": cid, "title": name, "action": "creative",
+                          "reason": f"hentikan {', '.join(stop)}", "by": who})
+        await team.send("creative", "approval", f"🎨 {len(stop)} creative dihentikan di {name} (#{cid}): "
+                        f"{', '.join(stop)}. Sisa aktif: {len(left)} creative.")
+        return True
+
+    if kind == "new_creative":
+        current = rollerads.creatives_of(await rollerads.detail(cid))
+        if not current:
+            raise rollerads.RollerAdsError("campaign ini belum punya creative untuk dijadikan contoh gambar")
+        wanted = {str(v) for v in (action.get("values") or [])}
+        source = next((c for c in current if str(c["creative_id"]) in wanted), current[0])
+        copy = await llm.ask(
+            AGENTS["creative"],
+            f"{memory.notes_text(2000)}\n\nCreative iklan yang sedang menang di campaign {name}:\n"
+            f"Judul: {source.get('creative_title')}\nTeks: {source.get('creative_descr')}\n\n"
+            f"Catatan: {action.get('brief') or action.get('reason', '')}\n\n"
+            "Tulis SATU variasi baru untuk diuji melawan creative itu: sudut pandang berbeda, bukan sekadar "
+            "tukar kata. Bahasa Indonesia, menarik tetapi tidak menipu dan patuh aturan iklan. "
+            "title maks 30 karakter, descr maks 45 karakter, angle: 1 kalimat apa yang diuji.",
+            schema=creatives.COPY_SCHEMA, task="kreatif")
+        total = await rollerads.add_creative(cid, copy["title"], copy["descr"],
+                                             source.get("creative_image_360", ""), source.get("creative_image_192", ""))
+        autopause.record({"campaign_id": cid, "title": name, "action": "creative",
+                          "reason": f"creative baru: {copy['title']}", "by": who})
+        await team.send("creative", "approval", f"🎨 Creative baru ditambahkan ke {name} (#{cid}):\n"
+                        f"Judul: {copy['title']}\nTeks: {copy['descr']}\nYang diuji: {copy['angle']}\n"
+                        f"Total creative sekarang: {total}. Menunggu moderasi RollerAds.")
         return True
 
     if kind == "exclude_country":

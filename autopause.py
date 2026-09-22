@@ -12,6 +12,7 @@ import bemob
 import config
 import rollerads
 import storage
+import targets
 from agents import LEADER
 from telegram_team import Team
 
@@ -27,7 +28,8 @@ def resume_keyboard(campaign_id: int) -> InlineKeyboardMarkup:
     )
 
 
-def judge(cost: float, conversions: int, account_cost: float, revenue: float | None = None) -> str | None:
+def judge(cost: float, conversions: int, account_cost: float, revenue: float | None = None,
+          max_cpa: float | None = None, cpa_note: str = "") -> str | None:
     """Alasan pause, atau None jika campaign boleh tetap jalan."""
     if account_cost >= config.MAX_DAILY_SPEND_USD:
         return (f"Spend seluruh akun hari ini ${account_cost:.2f} sudah mencapai batas harian "
@@ -40,8 +42,9 @@ def judge(cost: float, conversions: int, account_cost: float, revenue: float | N
     if conversions == 0:
         return f"Hasil jelek: spend ${cost:.2f} tanpa satu pun konversi."
     cpa = cost / conversions
-    if config.AUTOPAUSE_MAX_CPA_USD and cpa > config.AUTOPAUSE_MAX_CPA_USD:
-        return f"Hasil jelek: CPA ${cpa:.2f} di atas batas ${config.AUTOPAUSE_MAX_CPA_USD:g}."
+    limit = max_cpa if max_cpa else config.AUTOPAUSE_MAX_CPA_USD
+    if limit and cpa > limit:
+        return f"Hasil jelek: CPA ${cpa:.2f} di atas batas ${limit:.2f}" + (f" ({cpa_note})." if cpa_note else ".")
     if revenue is None and config.ROLLERADS_PAYOUT_USD:
         revenue = conversions * config.ROLLERADS_PAYOUT_USD
     if revenue:  # pendapatan 0 padahal ada konversi = payout offer belum diatur, ROI tidak dinilai
@@ -129,7 +132,9 @@ async def run(team: Team) -> list[dict]:
         if tracked is not None:  # konversi & pendapatan asli dari BeMob
             conversions = tracked.get(cid, {}).get("conversions", 0)
             revenue = tracked.get(cid, {}).get("revenue", 0.0)
-        reason = judge(cost, int(conversions), account_cost, revenue)
+        # Batas CPA: dihitung dari nilai pemain kalau datanya cukup, kalau tidak dari Pengaturan.
+        limit, note = targets.max_cpa(campaign["title"])
+        reason = judge(cost, int(conversions), account_cost, revenue, limit, note)
         if not reason:
             continue
         title = campaign["title"]

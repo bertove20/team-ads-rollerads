@@ -59,13 +59,18 @@ def yesterday_results() -> dict[str, dict]:
     return {}
 
 
-def decide(result: dict, detail: dict) -> tuple[str, float, float, str] | None:
+def decide(result: dict, detail: dict, campaign: str = "") -> tuple[str, float, float, str] | None:
     """(jenis, nilai sekarang, nilai usulan, alasan) atau None jika belum layak di-scale."""
+    import targets  # di sini supaya tidak saling impor saat program dimulai
     conversions = result.get("conversions", 0)
     roi = result.get("roi")
     cost = result.get("cost", 0)
     if conversions < config.AUTOSCALE_MIN_CONVERSIONS or roi is None or roi < config.AUTOSCALE_MIN_ROI_PCT:
         return None
+    target_cpa, _ = targets.max_cpa(campaign)
+    cpa = cost / conversions if conversions else None
+    if target_cpa and cpa and cpa > target_cpa:
+        return None  # CPA sudah di atas target: jangan tambah budget untuk kerugian
     budget = float(detail.get("campaign_spent_day") or 0)
     bid = float(detail.get("campaign_bid") or 0)
     step = 1 + config.AUTOSCALE_STEP_PCT / 100
@@ -117,7 +122,7 @@ async def run(team: Team) -> list[dict]:
             continue
         if (detail.get("campaign_moderation") or "approved").lower() != "approved":
             continue
-        decision = decide(result, detail)
+        decision = decide(result, detail, info["title"])
         if not decision:
             continue
         kind, old, new, reason = decision
@@ -133,4 +138,57 @@ async def run(team: Team) -> list[dict]:
             reply_markup=meeting.approval_keyboard(proposal_id), via_leader=True,
         )
         log.info("Auto-scale mengusulkan %s untuk %s: %s -> %s", kind, info["title"], old, new)
+    sent += await zone_bids(team, campaigns)
     return sent
+
+
+async def zone_bids(team: Team, campaigns: dict) -> list[dict]:
+    """Zone yang terbukti untung diusulkan diberi bid khusus lebih tinggi, supaya dapat lebih banyak trafik."""
+    import analysis
+    import data_source
+    import meeting
+    try:
+        snap = await analysis.latest()
+    except data_source.DataSourceError:
+        return []
+    step = 1 + config.AUTOSCALE_STEP_PCT / 100
+    by_campaign: dict[str, list] = {}
+    for row in snap.good_zones:
+        if row.cost >= config.ZONE_WASTE_USD and row.conversions >= 2:
+            by_campaign.setdefault(row.campaign, []).append(row)
+
+    sent = []
+    for cid, info in campaigns.items():
+        zones = by_campaign.get(info["title"]) or []
+        if info["status"] != "active" or len(zones) < 2 or _cooling_down_key(f"zonebid|{cid}"):
+            continue
+        try:
+            detail = await rollerads.detail(cid)
+        except rollerads.RollerAdsError:
+            continue
+        bid = float(detail.get("campaign_bid") or 0)
+        new_bid = min(round(bid * step, 4), config.CAMPAIGN_MAX_BID_USD)
+        if bid <= 0 or new_bid <= bid or (new_bid - bid) / bid * 100 > config.MAX_BID_CHANGE_PCT:
+            continue
+        top = sorted(zones, key=lambda r: -r.profit)[:10]
+        profit = sum(r.profit for r in top)
+        action = {"type": "zone_bid", "campaign": info["title"], "zones": [r.zone for r in top],
+                  "current_value": bid, "new_value": new_bid, "values": [], "hours": [], "website": "", "brief": "",
+                  "reason": f"{len(top)} zone ini menghasilkan profit ${profit:.2f} dengan bid biasa ${bid:g}. "
+                            f"Bid khusus ${new_bid:g} membuat iklan menang lelang lebih sering di zone itu saja."}
+        proposal_id = storage.add_proposal(action)
+        _mark_key(f"zonebid|{cid}")
+        sent.append({"id": proposal_id, **action})
+        await team.send("media_buyer", "approval",
+                        f"🎯 Usulan #{proposal_id} (bid khusus zone bagus)\n\n{meeting.describe_action(action)}\n\n"
+                        "Tekan Setuju untuk memasangnya di RollerAds.",
+                        reply_markup=meeting.approval_keyboard(proposal_id), via_leader=True)
+    return sent
+
+
+def _cooling_down_key(key: str) -> bool:
+    return time.time() - _state().get(key, 0) < config.AUTOSCALE_COOLDOWN_HOURS * 3600
+
+
+def _mark_key(key: str) -> None:
+    storage.put(STATE_KEY, {**_state(), key: time.time()})

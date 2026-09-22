@@ -150,11 +150,13 @@ def combined(group: str, limit: int = LOOKBACK) -> dict[str, dict]:
     return {k: _finish(v) for k, v in total.items()}
 
 
-def _bad(stat: dict, min_spend: float) -> bool:
-    """Boros = sudah menghabiskan cukup uang tetapi tidak menghasilkan."""
+def _bad(stat: dict, min_spend: float, max_cpa: float | None = None) -> bool:
+    """Boros = sudah menghabiskan cukup uang tetapi tidak menghasilkan, atau CPA-nya di atas target."""
     if stat["cost"] < min_spend:
         return False
     if stat["conversions"] == 0:
+        return True
+    if max_cpa and stat["cpa"] and stat["cpa"] > max_cpa:
         return True
     return stat["roi"] is not None and stat["roi"] < config.ZONE_MIN_ROI_PCT
 
@@ -204,7 +206,9 @@ def _mark(key: str) -> None:
 
 def suggestions() -> list[dict]:
     """Usulan berbasis data (belum dikirim). Tiap usulan sudah lolos pengaman dasar."""
+    import targets  # di sini supaya tidak saling impor saat program dimulai
     min_spend = max(config.ZONE_WASTE_USD, 1.0)
+    target_cpa, _ = targets.max_cpa()
     out: list[dict] = []
     per_campaign: dict[str, dict] = {}
     for group, field in (("campaign_hour", "hour"), ("campaign_country", "country"), ("campaign_os", "os")):
@@ -215,7 +219,7 @@ def suggestions() -> list[dict]:
     for campaign, data in per_campaign.items():
         # 1. Jam boros -> atur jam tayang
         hours = {h: s for h, s in data["hour"].items() if h != "?"}
-        bad_hours = sorted(int(h) for h, s in hours.items() if _bad(s, min_spend))
+        bad_hours = sorted(int(h) for h, s in hours.items() if _bad(s, min_spend, target_cpa))
         keep = sorted(int(h) for h in hours if int(h) not in bad_hours)
         if bad_hours and len(keep) >= MIN_HOURS_KEPT and not _cooling(f"hour|{campaign}"):
             waste = sum(hours[str(h)]["cost"] for h in bad_hours)
@@ -224,7 +228,7 @@ def suggestions() -> list[dict]:
                         "reason": f"Jam {', '.join(f'{h:02d}' for h in bad_hours)} menghabiskan ${waste:.2f} "
                                   f"dalam {LOOKBACK} hari tanpa hasil. Iklan dimatikan pada jam itu."})
         # 2. Negara rugi -> kecualikan
-        bad_countries = [c for c, s in data["country"].items() if c != "?" and _bad(s, min_spend * 2)]
+        bad_countries = [c for c, s in data["country"].items() if c != "?" and _bad(s, min_spend * 2, target_cpa)]
         good_countries = [c for c, s in data["country"].items() if c != "?" and _good(s)]
         if bad_countries and good_countries and not _cooling(f"country|{campaign}"):
             waste = sum(data["country"][c]["cost"] for c in bad_countries)
@@ -234,7 +238,7 @@ def suggestions() -> list[dict]:
                                   f"{LOOKBACK} hari tanpa untung, sedangkan {', '.join(sorted(good_countries)[:3])} "
                                   "menghasilkan."})
         # 3. OS/device rugi -> kecualikan
-        bad_os = [o for o, s in data["os"].items() if o != "?" and _bad(s, min_spend * 2)]
+        bad_os = [o for o, s in data["os"].items() if o != "?" and _bad(s, min_spend * 2, target_cpa)]
         good_os = [o for o, s in data["os"].items() if o != "?" and _good(s)]
         if bad_os and good_os and not _cooling(f"os|{campaign}"):
             waste = sum(data["os"][o]["cost"] for o in bad_os)

@@ -38,7 +38,8 @@ STEPS = [
 ]
 
 ACTION_TYPES = ["blacklist_zones", "whitelist_zones", "change_bid", "pause_campaign", "change_daily_budget",
-                "set_dayparting", "set_freq_cap", "exclude_country", "exclude_os", "create_lander", "other"]
+                "set_dayparting", "set_freq_cap", "exclude_country", "exclude_os", "zone_bid",
+                "pause_creative", "new_creative", "create_lander", "other"]
 
 PROPOSAL_SCHEMA = {
     "type": "object",
@@ -116,6 +117,21 @@ def validate(actions: list[dict], snap: analysis.Snapshot) -> tuple[list[dict], 
                                 "supaya campaign tidak kehilangan terlalu banyak trafik.")
                 continue
             action = {**action, "hours": hours}
+        elif kind == "zone_bid":
+            zones = [z for z in action["zones"] if z in snap.all_zones and str(z).isdigit()]
+            bid = action["new_value"]
+            if not zones:
+                rejected.append(f"Bid zone {action['campaign']} ditolak: zone tidak ada di data.")
+                continue
+            if bid <= 0 or bid > config.CAMPAIGN_MAX_BID_USD:
+                rejected.append(f"Bid zone {action['campaign']} ditolak: ${bid:g} di luar batas "
+                                f"(maks ${config.CAMPAIGN_MAX_BID_USD:g}).")
+                continue
+            action = {**action, "zones": zones}
+        elif kind == "pause_creative":
+            if not (action.get("values") or []):
+                rejected.append(f"Hentikan creative {action['campaign']} ditolak: tidak menyebut creative mana.")
+                continue
         elif kind in ("exclude_country", "exclude_os"):
             values = [v.strip() for v in (action.get("values") or []) if v.strip()]
             if not values:
@@ -166,6 +182,15 @@ def describe_action(action: dict) -> str:
     elif kind == "exclude_os":
         what = (f"Hentikan iklan {action['campaign']} di device/OS: " + ", ".join(action.get("values") or [])
                 + " (OS lain tetap jalan)")
+    elif kind == "zone_bid":
+        what = (f"Bid khusus ${action['new_value']:g} untuk {len(action['zones'])} zone di "
+                f"{action['campaign']}:\n" + ", ".join(action["zones"]))
+    elif kind == "pause_creative":
+        what = (f"Hentikan {len(action.get('values') or [])} creative di {action['campaign']} (id: "
+                + ", ".join(action.get("values") or []) + ")")
+    elif kind == "new_creative":
+        what = (f"Buat creative baru untuk {action['campaign']} (judul & teks ditulis Creative, "
+                "gambar memakai creative yang sudah ada)")
     elif kind == "create_lander":
         what = f"Buat landing page baru (tim AI) untuk {action['website']}: {action.get('brief') or '-'}"
     elif kind == "create_campaign":
@@ -234,7 +259,7 @@ async def run_meeting(team: Team, reason: str) -> None:
                 f"{MAX_ACTIONS}). Hanya tindakan yang disetujui Head of Marketing. Gunakan ID zone dan "
                 "nama campaign persis seperti di data. Untuk set_dayparting isi hours (jam 0-23 yang boleh tayang, "
                 "minimal 6 jam). Untuk set_freq_cap isi new_value (maks tayangan per orang) dan hours[0] (periode "
-                "jam). Untuk exclude_country/exclude_os isi values (kode negara ISO2 mis. MY, atau nama OS mis. iOS). Untuk whitelist_zones isi zones (minimal 2 zone bagus). Untuk create_lander isi website (host dari Status tracking) "
+                "jam). Untuk exclude_country/exclude_os isi values (kode negara ISO2 mis. MY, atau nama OS mis. iOS). Untuk zone_bid isi zones + new_value (bid khusus). Untuk pause_creative isi values (id creative) dan zones (id creative yang DIPERTAHANKAN). Untuk whitelist_zones isi zones (minimal 2 zone bagus). Untuk create_lander isi website (host dari Status tracking) "
                 "dan brief (ide landing page). Isi field yang tidak relevan dengan string "
                 "kosong, list kosong, atau 0. Jika tidak ada tindakan, kembalikan list kosong.",
                 schema=PROPOSAL_SCHEMA, task="rapat",

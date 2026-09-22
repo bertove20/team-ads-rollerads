@@ -21,6 +21,7 @@ import bemob
 import breakdown
 import checks
 import config
+import creatives
 import data_source
 import landing
 import llm
@@ -31,6 +32,7 @@ import rollerads
 import scorecard
 import settings
 import storage
+import targets
 import tracking
 import watch
 from agents import AGENTS, LEADER
@@ -386,7 +388,11 @@ async def breakdown_view(request: web.Request) -> web.Response:
         "lookback": breakdown.LOOKBACK,
         "by_country": rows("country"), "by_os": rows("os"), "by_hour": rows("hour"),
         "suggestions": [{"type": a["type"], "campaign": a["campaign"], "reason": a["reason"],
-                         "text": meeting.describe_action(a)} for a in breakdown.suggestions()],
+                         "text": meeting.describe_action(a)}
+                        for a in breakdown.suggestions() + creatives.suggestions()],
+        "creatives": sorted(({"key": k, **v} for k, v in creatives.combined().items() if v["cost"] > 0 or v["clicks"]),
+                            key=lambda x: -x["cost"]),
+        "target_cpa": dict(zip(("value", "note"), targets.max_cpa())),
         "has_hour": any((s or {}).get("has_hour") for s in (saved.values() if isinstance(saved, dict) else [])),
     })
 

@@ -117,6 +117,10 @@ AI_DAILY_BUDGET_USD = _float("AI_DAILY_BUDGET_USD", 5)
 MIN_BALANCE_USD = _float("MIN_BALANCE_USD", 20)          # saldo RollerAds di bawah ini -> alert
 CONV_DIFF_ALERT_PCT = _float("CONV_DIFF_ALERT_PCT", 30)  # selisih konversi BeMob vs RollerAds -> alert
 
+# Target CPA dihitung dari nilai pemain (ltv.py): CPA target = nilai pemain x (100% - margin).
+TARGET_MARGIN_PCT = _float("TARGET_MARGIN_PCT", 30)     # margin yang ingin disisakan
+TARGET_MIN_PLAYERS = _int("TARGET_MIN_PLAYERS", 15)     # data pemain minimal agar angkanya dipercaya
+
 # Auto-scale: campaign yang untung diusulkan dinaikkan budget/bid-nya (tetap butuh persetujuan Owner)
 AUTOSCALE_ENABLED = _str("AUTOSCALE_ENABLED", "1") == "1"
 AUTOSCALE_MIN_CONVERSIONS = _int("AUTOSCALE_MIN_CONVERSIONS", 3)   # minimal konversi 24 jam terakhir
@@ -155,7 +159,7 @@ DASHBOARD_PASSWORD = _str("DASHBOARD_PASSWORD")
 # Password kedua (opsional) untuk akun "hanya melihat": bisa membaca semua data, tidak bisa mengubah apa pun.
 DASHBOARD_VIEWER_PASSWORD = _str("DASHBOARD_VIEWER_PASSWORD")
 # Domain publik dashboard di VPS (mis. ads.domain-anda.com), dilayani HTTPS oleh Caddy di depan program.
-DASHBOARD_DOMAIN =_str("DASHBOARD_DOMAIN").lower().removeprefix("https://").removeprefix("http://").strip("/")
+DASHBOARD_DOMAIN = _str("DASHBOARD_DOMAIN").lower().removeprefix("https://").removeprefix("http://").strip("/")
 
 # Topic di grup Telegram: key -> nama yang tampil
 TOPICS = {

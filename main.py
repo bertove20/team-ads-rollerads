@@ -28,6 +28,7 @@ import autoscale
 import breakdown
 import checks
 import config
+import creatives
 import dashboard
 import data_source
 import landing
@@ -148,6 +149,7 @@ async def job_analyst(context: ContextTypes.DEFAULT_TYPE, force: bool = False) -
     storage.put("last_facts", analysis.facts_text(snap))
     try:  # rincian per negara/device/jam (1 panggilan API, tanpa AI)
         await breakdown.collect()
+        await creatives.collect()
     except Exception:  # noqa: BLE001 - rincian gagal tidak boleh menghentikan laporan
         log.exception("Rincian negara/device/jam gagal diambil")
     await team.send("analyst", "laporan", analysis.hourly_report(snap))
@@ -199,6 +201,10 @@ async def job_daily_report(context: ContextTypes.DEFAULT_TYPE) -> None:
         await breakdown.run(team)
     except Exception:  # noqa: BLE001
         log.exception("Usulan dari rincian gagal dibuat")
+    try:  # usulan dari performa creative
+        await creatives.run(team)
+    except Exception:  # noqa: BLE001
+        log.exception("Usulan creative gagal dibuat")
     try:  # rangkum obrolan & laporan hari ini ke ingatan tim
         await memory.consolidate_chat()
     except llm.LLMError as e:
