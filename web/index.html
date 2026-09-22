@@ -1,0 +1,1928 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dashboard Tim AI</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --surface-2: #f0efec;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #898781;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --border: rgba(11,11,11,0.10);
+  --accent: #2a78d6;
+  --accent-ink: #ffffff;
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --pos: #2a78d6;
+  --neg: #e34948;
+  --good: #0ca30c;
+  --good-ink: #006300;
+  --warning: #fab219;
+  --serious: #ec835a;
+  --critical: #d03b3b;
+  --good-bg: rgba(12,163,12,0.10);
+  --warning-bg: rgba(250,178,25,0.16);
+  --critical-bg: rgba(208,59,59,0.10);
+  --info-bg: rgba(42,120,214,0.10);
+  --shadow: 0 1px 2px rgba(0,0,0,0.04);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --surface-2: #262624;
+    --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+    --accent: #3987e5; --series-1: #3987e5; --series-2: #d95926;
+    --pos: #3987e5; --neg: #e66767; --good-ink: #0ca30c;
+    --good-bg: rgba(12,163,12,0.16); --warning-bg: rgba(250,178,25,0.14);
+    --critical-bg: rgba(208,59,59,0.18); --info-bg: rgba(57,135,229,0.16);
+    --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface: #1a1a19; --surface-2: #262624;
+  --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+  --accent: #3987e5; --series-1: #3987e5; --series-2: #d95926;
+  --pos: #3987e5; --neg: #e66767; --good-ink: #0ca30c;
+  --good-bg: rgba(12,163,12,0.16); --warning-bg: rgba(250,178,25,0.14);
+  --critical-bg: rgba(208,59,59,0.18); --info-bg: rgba(57,135,229,0.16);
+  --shadow: none;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--page); color: var(--ink);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+a { color: var(--accent); }
+
+/* ---------- layout ---------- */
+.app { display: grid; grid-template-columns: 232px 1fr; min-height: 100vh; }
+nav.side {
+  background: var(--surface); border-right: 1px solid var(--border);
+  padding: 20px 12px; position: sticky; top: 0; height: 100vh; overflow-y: auto;
+}
+.brand { font-weight: 700; font-size: 16px; padding: 0 10px 16px; }
+.brand small { display: block; font-weight: 400; color: var(--muted); font-size: 12px; }
+nav.side a {
+  display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 8px;
+  color: var(--ink-2); text-decoration: none; margin-bottom: 2px;
+}
+nav.side a:hover { background: var(--surface-2); color: var(--ink); }
+nav.side a.active { background: var(--info-bg); color: var(--ink); font-weight: 600; }
+nav.side a .count {
+  margin-left: auto; background: var(--critical); color: #fff; border-radius: 10px;
+  font-size: 12px; padding: 0 7px; font-weight: 600;
+}
+main { padding: 24px 32px 48px; min-width: 0; }
+header.top {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 20px;
+}
+header.top h1 { font-size: 22px; margin: 0; flex: 1 1 auto; }
+.pill {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 13px; padding: 4px 10px;
+  border-radius: 999px; background: var(--surface); border: 1px solid var(--border); color: var(--ink-2);
+  white-space: nowrap;
+}
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
+
+section.page { display: none; }
+section.page.active { display: block; }
+.page-intro { color: var(--ink-2); margin: -8px 0 20px; max-width: 760px; }
+
+/* ---------- blocks ---------- */
+.card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  padding: 18px 20px; box-shadow: var(--shadow); margin-bottom: 16px; min-width: 0;
+}
+.card h2 { font-size: 16px; margin: 0 0 4px; }
+.card .sub { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
+.grid { display: grid; gap: 16px; }
+.grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.grid.kpi { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin-bottom: 16px; }
+.tile {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  padding: 14px 16px; box-shadow: var(--shadow);
+}
+.tile .label { font-size: 13px; color: var(--ink-2); display: flex; align-items: center; gap: 4px; }
+.tile .value { font-size: 26px; font-weight: 650; margin-top: 2px; letter-spacing: -0.01em; }
+.tile .note { font-size: 12px; color: var(--muted); }
+.help {
+  display: inline-flex; width: 16px; height: 16px; border-radius: 50%; font-size: 11px;
+  align-items: center; justify-content: center; background: var(--surface-2); color: var(--muted);
+  cursor: help; font-weight: 700; flex: none;
+}
+.up { color: var(--good-ink); }
+.down { color: var(--critical); }
+
+.banner {
+  border-radius: 12px; padding: 14px 18px; margin-bottom: 16px; border: 1px solid var(--border);
+}
+.banner.warning { background: var(--warning-bg); }
+.banner.critical { background: var(--critical-bg); }
+.banner.info { background: var(--info-bg); }
+.banner strong { display: block; margin-bottom: 4px; }
+
+.insights { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.insights li {
+  display: grid; grid-template-columns: 28px 1fr; gap: 10px; padding: 12px 14px; border-radius: 10px;
+}
+.insights li.good { background: var(--good-bg); }
+.insights li.warning { background: var(--warning-bg); }
+.insights li.critical { background: var(--critical-bg); }
+.insights li.info { background: var(--info-bg); }
+.insights .ic {
+  width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 13px; font-weight: 700;
+}
+.ic.good { background: var(--good); } .ic.warning { background: var(--warning); color: #0b0b0b; }
+.ic.critical { background: var(--critical); } .ic.info { background: var(--accent); }
+.insights .t { font-weight: 600; }
+.insights .d { color: var(--ink-2); font-size: 14px; }
+.tag {
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; margin-right: 6px;
+  color: var(--ink-2);
+}
+
+.meter { height: 10px; background: var(--surface-2); border-radius: 999px; overflow: hidden; margin: 8px 0 6px; }
+.meter > div { height: 100%; border-radius: 999px; }
+
+.shortcuts { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+.shortcut {
+  display: block; text-decoration: none; color: inherit; padding: 14px 16px; border-radius: 12px;
+  border: 1px solid var(--border); background: var(--surface);
+}
+.shortcut:hover { border-color: var(--accent); }
+.shortcut .big { font-size: 22px; font-weight: 650; }
+.shortcut .small { font-size: 13px; color: var(--ink-2); }
+
+/* ---------- table ---------- */
+.table-wrap { overflow-x: auto; margin: 0 -4px; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { padding: 9px 10px; text-align: left; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+th { font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
+th.sortable { cursor: pointer; user-select: none; }
+th.sortable:hover { color: var(--ink); }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+tr:hover td { background: var(--surface-2); }
+.badge {
+  display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600;
+  padding: 2px 8px; border-radius: 999px; background: var(--surface-2); color: var(--ink-2);
+}
+.badge.good { background: var(--good-bg); color: var(--good-ink); }
+.badge.warning { background: var(--warning-bg); color: var(--ink); }
+.badge.critical { background: var(--critical-bg); color: var(--critical); }
+.badge.info { background: var(--info-bg); color: var(--accent); }
+
+/* ---------- controls ---------- */
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
+.btn {
+  border: 1px solid var(--border); background: var(--surface); padding: 8px 14px; border-radius: 8px;
+  cursor: pointer; font-weight: 550; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+}
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.good { background: var(--good); border-color: var(--good); color: #fff; }
+.btn.danger { color: var(--critical); }
+.btn:disabled { opacity: .55; cursor: wait; }
+.chip {
+  border: 1px solid var(--border); background: var(--surface); padding: 5px 12px; border-radius: 999px;
+  cursor: pointer; font-size: 13px;
+}
+.chip.active { background: var(--ink); color: var(--page); border-color: var(--ink); }
+input[type=text], input[type=search], input[type=password], input[type=number], input[type=time], select, textarea {
+  border: 1px solid var(--border); background: var(--surface); border-radius: 8px; padding: 8px 10px;
+  min-width: 0;
+}
+textarea { width: 100%; resize: vertical; min-height: 80px; }
+
+.chart-box { position: relative; height: 280px; }
+.chart-box.short { height: 220px; }
+.empty { color: var(--muted); padding: 24px 0; text-align: center; }
+
+/* ---------- proposals / feed ---------- */
+.proposal {
+  border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin-bottom: 12px;
+  background: var(--surface);
+}
+.proposal .head { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; flex-wrap: wrap; }
+.proposal pre, .msg .text {
+  white-space: pre-wrap; word-break: break-word; font: inherit; margin: 0;
+}
+.proposal .actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.feed { display: grid; gap: 10px; }
+.msg { border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; background: var(--surface); }
+.msg .meta { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; margin-bottom: 4px; }
+.msg .who { font-weight: 600; }
+.msg .when { color: var(--muted); font-size: 12px; }
+.chat { display: flex; flex-direction: column; gap: 10px; max-height: 60vh; overflow-y: auto; padding: 4px; }
+.bubble { max-width: 85%; padding: 10px 14px; border-radius: 14px; background: var(--surface-2); }
+.bubble.me { align-self: flex-end; background: var(--info-bg); }
+.bubble .who { font-size: 12px; font-weight: 600; color: var(--ink-2); margin-bottom: 2px; }
+.bubble .text { white-space: pre-wrap; word-break: break-word; }
+
+.setup-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.setup-list li { display: grid; grid-template-columns: 22px 1fr; gap: 8px; }
+.setup-list .hint { color: var(--ink-2); font-size: 13px; }
+dl.glossary { display: grid; grid-template-columns: 150px 1fr; gap: 8px 16px; margin: 0; }
+dl.glossary dt { font-weight: 600; }
+dl.glossary dd { margin: 0; color: var(--ink-2); }
+
+/* ---------- pengaturan ---------- */
+.field { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 6px 20px; padding: 12px 0; border-top: 1px solid var(--grid); }
+.field:first-of-type { border-top: none; }
+.field[hidden] { display: none; }
+.field label { font-weight: 600; font-size: 14px; padding-top: 8px; }
+.fhelp { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.field input, .field select, .field textarea { width: 100%; }
+.field textarea { min-height: 70px; }
+.inline { display: flex; gap: 8px; align-items: center; }
+.inline > input { flex: 1 1 auto; }
+.linkbtn { background: none; border: none; color: var(--accent); cursor: pointer; padding: 0; font-size: 13px; }
+.results { list-style: none; margin: 12px 0 0; padding: 12px 14px; border-radius: 10px; background: var(--surface-2); display: grid; gap: 6px; }
+.results li { display: grid; grid-template-columns: 20px 1fr; gap: 6px; font-size: 14px; }
+.found { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.savebar {
+  position: sticky; bottom: 16px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+  background: var(--surface); border: 1px solid var(--accent); border-radius: 12px; padding: 12px 16px;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.12); z-index: 4;
+}
+.savebar[hidden] { display: none; }
+@media (max-width: 900px) {
+  .field { grid-template-columns: 1fr; }
+  .field label { padding-top: 0; }
+}
+
+/* ---------- form campaign ---------- */
+.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
+.form-grid label { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var(--ink-2); min-width: 0; }
+.form-grid label.wide { grid-column: 1 / -1; }
+.form-grid input, .form-grid select { width: 100%; }
+.form-grid .fhelp { font-weight: 400; margin: 0; }
+.form-grid [hidden] { display: none; }
+.errors { margin: 12px 0 0; padding: 10px 14px 10px 30px; border-radius: 10px; background: var(--critical-bg); }
+.errors:empty { display: none; }
+@media (max-width: 900px) { .form-grid { grid-template-columns: 1fr; } }
+
+/* ---------- script tracking ---------- */
+textarea.code, pre.code {
+  font: 12px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace; background: var(--surface-2);
+  border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; width: 100%; white-space: pre;
+  overflow: auto; min-height: 220px; max-height: 420px; tab-size: 2;
+}
+.kv { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 6px 14px; font-size: 14px; margin: 0 0 12px; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; min-width: 0; word-break: break-word; }
+.joblog { font-size: 13px; color: var(--ink-2); display: grid; gap: 4px; margin: 10px 0 0; padding: 10px 14px;
+  border-radius: 10px; background: var(--info-bg); list-style: none; }
+details.more summary { cursor: pointer; color: var(--accent); font-size: 14px; margin: 10px 0 6px; }
+@media (max-width: 900px) { .kv { grid-template-columns: 1fr; gap: 0 0; } .kv dd { margin-bottom: 8px; } }
+
+#toast {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--ink);
+  color: var(--page); padding: 10px 18px; border-radius: 10px; font-size: 14px; opacity: 0;
+  transition: opacity .2s; pointer-events: none; z-index: 10; max-width: calc(100vw - 32px);
+}
+#toast.show { opacity: 1; }
+
+/* ---------- mobile ---------- */
+@media (max-width: 900px) {
+  .app { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; }
+  nav.side {
+    min-width: 0;
+    position: sticky; top: 0; height: auto; z-index: 5; display: flex; overflow-x: auto; gap: 4px;
+    padding: 8px 12px; border-right: none; border-bottom: 1px solid var(--border);
+  }
+  .brand { display: none; }
+  nav.side a { white-space: nowrap; margin: 0; padding: 7px 10px; }
+  main { padding: 16px 16px 40px; }
+  .grid.two { grid-template-columns: 1fr; }
+  dl.glossary { grid-template-columns: 1fr; gap: 2px; }
+  dl.glossary dd { margin-bottom: 10px; }
+  .tile .value { font-size: 22px; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="side" id="nav">
+    <div class="brand">📈 Tim AI Ads<small>Dashboard Owner</small></div>
+    <a href="#ringkasan" data-page="ringkasan">🏠 Ringkasan</a>
+    <a href="#campaign" data-page="campaign">📦 Campaign</a>
+    <a href="#rollerads" data-page="rollerads">🚀 RollerAds</a>
+    <a href="#zone" data-page="zone">🧩 Zone</a>
+    <a href="#tren" data-page="tren">📈 Tren</a>
+    <a href="#usulan" data-page="usulan">🎯 Usulan &amp; Tugas <span class="count" id="nav-count" hidden></span></a>
+    <a href="#rapat" data-page="rapat">💬 Rapat &amp; Laporan</a>
+    <a href="#tanya" data-page="tanya">🙋 Tanya Tim</a>
+    <a href="#ingatan" data-page="ingatan">🧠 Ingatan Tim</a>
+    <a href="#tracking" data-page="tracking">🔌 Script Tracking</a>
+    <a href="#lp" data-page="lp">🛰️ Landing Page</a>
+    <a href="#biaya" data-page="biaya">💰 Biaya AI</a>
+    <a href="#pengaturan" data-page="pengaturan">🔑 Pengaturan</a>
+    <a href="#bantuan" data-page="bantuan">❓ Bantuan</a>
+    <a href="/login" id="nav-logout" title="Keluar dari dashboard di perangkat ini">🚪 Keluar</a>
+  </nav>
+
+  <main>
+    <header class="top">
+      <h1 id="page-title">Ringkasan</h1>
+      <span class="pill" id="pill-data" title="Sumber data">…</span>
+      <span class="pill" id="pill-telegram">…</span>
+      <button class="pill" id="pill-auto" style="cursor:pointer" title="Klik untuk pause / lanjutkan otomatisasi AI">…</button>
+      <span class="pill" id="pill-updated">Memuat…</span>
+      <button class="pill" id="theme-toggle" style="cursor:pointer" title="Ganti tema terang/gelap">🌓</button>
+    </header>
+
+    <!-- ================= RINGKASAN ================= -->
+    <section class="page" id="page-ringkasan">
+      <div id="ov-banners"></div>
+      <div class="grid kpi" id="ov-kpi"></div>
+      <div class="grid two">
+        <div class="card">
+          <h2>Evaluasi otomatis</h2>
+          <p class="sub">Dihitung otomatis dari data hari ini, tanpa biaya AI.</p>
+          <ul class="insights" id="ov-insights"></ul>
+        </div>
+        <div>
+          <div class="card">
+            <h2>Pemakaian batas spend harian</h2>
+            <p class="sub">Batas pengaman yang Anda atur di .env</p>
+            <div id="ov-meter"></div>
+          </div>
+          <div class="shortcuts" id="ov-shortcuts"></div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Biaya iklan vs pendapatan hari ini</h2>
+        <p class="sub">Angka kumulatif sejak jam 00:00. Kalau garis pendapatan di atas garis biaya, Anda untung.</p>
+        <div class="chart-box"><canvas id="ch-today"></canvas></div>
+      </div>
+    </section>
+
+    <!-- ================= CAMPAIGN ================= -->
+    <section class="page" id="page-campaign">
+      <p class="page-intro">Performa tiap campaign hari ini. Batang biru = untung, batang merah = rugi.</p>
+      <div class="card">
+        <h2>Profit per campaign</h2>
+        <p class="sub">Profit = pendapatan − biaya iklan</p>
+        <div class="chart-box short"><canvas id="ch-campaign"></canvas></div>
+      </div>
+      <div class="card">
+        <h2>Detail campaign</h2>
+        <div class="table-wrap"><table id="tb-campaign"></table></div>
+      </div>
+    </section>
+
+    <!-- ================= ROLLERADS ================= -->
+    <section class="page" id="page-rollerads">
+      <p class="page-intro">Kendali campaign RollerAds lewat API: pause/aktifkan, auto-pause campaign yang boros, dan buat
+        campaign baru. Campaign berstatus <b>archived</b> tidak pernah dibaca atau diubah.</p>
+      <div id="ra-banners"></div>
+      <div class="grid kpi" id="ra-kpi"></div>
+      <div class="card">
+        <div class="toolbar" style="margin:0 0 4px">
+          <h2 style="flex:1;margin:0">Campaign</h2>
+          <button class="btn" id="ra-check" title="Jalankan pemeriksaan auto-pause sekarang">⏸️ Cek auto-pause sekarang</button>
+        </div>
+        <p class="sub">Angka hari ini dari RollerAds. Konversi hanya terhitung jika postback BeMob → RollerAds terpasang.</p>
+        <div class="table-wrap"><table id="tb-ra"></table></div>
+      </div>
+      <div class="grid two">
+        <div class="card">
+          <h2>Aturan auto-pause</h2>
+          <p class="sub">Campaign <b>active</b> di-pause otomatis jika salah satu terpenuhi. Ubah di <a href="#pengaturan">Pengaturan</a>.</p>
+          <ul class="setup-list" id="ra-rules"></ul>
+        </div>
+        <div class="card">
+          <h2>Riwayat tindakan</h2>
+          <p class="sub">Pause, aktifkan, campaign baru, blacklist zone, ubah bid, dan ubah budget.</p>
+          <div class="table-wrap"><table id="tb-ra-log"></table></div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Buat campaign baru</h2>
+        <p class="sub">Isi sendiri, atau tulis permintaan lalu biarkan Media Buyer mengisi form (memakai kredit AI). Campaign
+          dibuat setelah Anda klik <b>Buat campaign</b>. Di Telegram: <code>/campaignbaru …</code> atau minta ke agent.</p>
+        <div class="toolbar">
+          <input type="text" id="ra-brief" placeholder="Mis. popunder Indonesia, CPM bid 1.5, budget harian 20, ke https://domain.com/" style="flex:1 1 320px">
+          <button class="btn" id="ra-draft">🎯 Isi dengan AI</button>
+        </div>
+        <form id="ra-form" class="form-grid" autocomplete="off">
+          <label class="wide">Nama campaign<input type="text" name="title" maxlength="128" required></label>
+          <label>Format iklan<select name="format_id" id="ra-format"></select></label>
+          <label>Model bid<select name="bid_model_id" id="ra-bidmodel"></select></label>
+          <label>Bid (USD)<input type="number" name="bid" step="any" min="0" required><span class="fhelp" id="ra-bid-help"></span></label>
+          <label>Negara<input type="text" name="countries" placeholder="ID, MY" required><span class="fhelp">Kode 2 huruf, pisahkan koma.</span></label>
+          <label class="wide">URL tujuan (link campaign BeMob)<input type="text" name="url" list="ra-lps" placeholder="https://" required>
+            <datalist id="ra-lps"></datalist>
+            <span class="fhelp" data-lander hidden>Tetap link campaign BeMob, bukan alamat landing page.</span></label>
+          <label class="wide">Alur pengunjung<select name="flow" id="ra-flow">
+            <option value="direct" selected>Langsung ke website (Iklan → BeMob → website)</option>
+            <option value="lander">Lewat landing page (Iklan → BeMob → landing page → tombol → BeMob → website)</option></select></label>
+          <label class="wide" data-lander hidden>Alamat landing page<input type="text" name="lander_url" placeholder="https://landing-anda.com/">
+            <span class="fhelp">Landing page yang sudah terdaftar di BeMob (menu Landers). Developer mengecek semua tombolnya harus menuju Click URL BeMob.</span></label>
+          <label class="wide" data-lander hidden>Click URL BeMob (opsional)<input type="text" name="click_url" placeholder="https://xxxxx.bemobtrcks.com/click">
+            <span class="fhelp">Alamat untuk tombol di landing page. Kosongkan jika tidak tahu: sistem menebaknya dari domain BeMob Anda.</span></label>
+          <label>Budget harian (USD)<input type="number" name="daily_budget" step="any" min="0" required><span class="fhelp" id="ra-budget-help"></span></label>
+          <label>Budget total (USD)<input type="number" name="total_budget" step="any" min="0" value="0"><span class="fhelp">0 = tanpa batas total.</span></label>
+          <label class="wide"><span id="ra-site-label">Website tempat script tracking dipasang (opsional)</span><input type="text" name="site_url" placeholder="https://domain-anda.com/ — kosongkan jika sama dengan tujuan link BeMob">
+            <span class="fhelp">Setelah campaign dibuat, Developer otomatis membuat script tracking untuk website ini dan QA mengetes koneksinya.</span></label>
+          <label>Status awal<select name="status">
+            <option value="paused" selected>Paused (cek dulu di RollerAds)</option>
+            <option value="active">Langsung aktif</option></select></label>
+          <span></span>
+          <label class="wide" data-creative>Judul iklan<input type="text" name="creative_title" maxlength="64"></label>
+          <label class="wide" data-creative>Deskripsi iklan<input type="text" name="creative_descr" maxlength="128"></label>
+          <label data-creative>URL gambar besar (360×240, native 1200×675)<input type="text" name="image_360" placeholder="https://"></label>
+          <label data-creative>URL ikon (192×192)<input type="text" name="image_192" placeholder="https://"></label>
+          <input type="hidden" name="reason">
+        </form>
+        <ul class="errors" id="ra-errors"></ul>
+        <div class="toolbar" style="margin:14px 0 0">
+          <button class="btn primary" id="ra-create">🚀 Buat campaign</button>
+          <button class="btn" id="ra-reset" type="button">Kosongkan</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= ZONE ================= -->
+    <section class="page" id="page-zone">
+      <p class="page-intro">Zone = situs/penempatan tempat iklan Anda tampil. Zone <b>boros</b> menghabiskan uang tanpa hasil
+        dan biasanya perlu di-blacklist. Zone <b>bagus</b> menghasilkan profit.</p>
+      <div class="card">
+        <div class="toolbar">
+          <button class="chip active" data-zfilter="all">Semua</button>
+          <button class="chip" data-zfilter="boros">🔴 Boros</button>
+          <button class="chip" data-zfilter="bagus">🟢 Bagus</button>
+          <button class="chip" data-zfilter="normal">Normal</button>
+          <select id="z-campaign"><option value="">Semua campaign</option></select>
+          <input type="search" id="z-search" placeholder="Cari ID zone…">
+          <span style="flex:1"></span>
+          <button class="btn" id="z-copy" title="Salin ID zone yang tampil untuk ditempel ke blacklist RollerAds">📋 Salin ID zone yang tampil</button>
+        </div>
+        <p class="sub" id="z-summary"></p>
+        <div class="table-wrap"><table id="tb-zone"></table></div>
+      </div>
+    </section>
+
+    <!-- ================= TREN ================= -->
+    <section class="page" id="page-tren">
+      <p class="page-intro">Riwayat performa per hari (30 hari terakhir). Riwayat mulai terkumpul sejak dashboard ini dipasang.</p>
+      <div class="card">
+        <h2>Profit per hari</h2>
+        <p class="sub">Biru = untung, merah = rugi</p>
+        <div class="chart-box"><canvas id="ch-daily-profit"></canvas></div>
+      </div>
+      <div class="card">
+        <h2>Biaya iklan vs pendapatan per hari</h2>
+        <div class="chart-box"><canvas id="ch-daily-cr"></canvas></div>
+      </div>
+      <div class="card">
+        <h2>Tabel harian</h2>
+        <div class="table-wrap"><table id="tb-daily"></table></div>
+      </div>
+    </section>
+
+    <!-- ================= USULAN ================= -->
+    <section class="page" id="page-usulan">
+      <p class="page-intro">Usulan hasil rapat tim AI yang sudah lolos pengecekan batas pengaman. Setujui atau tolak di sini
+        (sama dengan tombol di Telegram). Setelah disetujui, semua usulan langsung dijalankan tim: pause campaign, campaign baru,
+        blacklist zone, ubah bid, ubah budget harian (lewat RollerAds API), dan landing page baru. Hanya jika API gagal,
+        usulan menjadi tugas manual di bawah.</p>
+      <div class="grid two">
+        <div class="card">
+          <h2>Menunggu keputusan Anda</h2>
+          <p class="sub">Baca alasannya, lalu pilih Setuju atau Tolak.</p>
+          <div id="pr-pending"></div>
+        </div>
+        <div class="card">
+          <h2>Tugas manual belum dikerjakan</h2>
+          <p class="sub">Kerjakan di dashboard RollerAds, lalu klik “Sudah dikerjakan”.</p>
+          <div id="tk-open"></div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Riwayat usulan</h2>
+        <div class="table-wrap"><table id="tb-proposals"></table></div>
+      </div>
+    </section>
+
+    <!-- ================= RAPAT ================= -->
+    <section class="page" id="page-rapat">
+      <p class="page-intro">Semua obrolan dan laporan tim AI tersimpan di sini, sama seperti di grup Telegram.</p>
+      <div class="card">
+        <h2>Mulai rapat tim sekarang</h2>
+        <p class="sub">Analyst → Media Buyer → Ads Manager → Head of Marketing berdiskusi, lalu usulan dikirim ke menu Usulan. Memakai kredit AI.</p>
+        <div class="toolbar">
+          <input type="text" id="mt-agenda" placeholder="Agenda (opsional), mis. Evaluasi campaign popunder" style="flex:1 1 260px">
+          <button class="btn primary" id="mt-start">▶ Mulai rapat</button>
+          <button class="btn" id="rp-daily">🗓️ Buat laporan harian AI</button>
+        </div>
+        <div id="mt-status" class="sub"></div>
+      </div>
+      <div class="toolbar" id="feed-topics"></div>
+      <div class="feed" id="feed"></div>
+    </section>
+
+    <!-- ================= TANYA ================= -->
+    <section class="page" id="page-tanya">
+      <p class="page-intro">Tanya langsung ke anggota tim AI, mis. “kenapa ROI turun?” atau “zone mana yang harus saya blacklist dulu?”.
+        Mereka menjawab berdasarkan data terbaru. Setiap pertanyaan memakai kredit AI.</p>
+      <div class="card">
+        <div class="chat" id="chat"></div>
+        <div class="toolbar" style="margin-top:14px">
+          <select id="ask-agent"></select>
+          <span class="sub" style="margin:0">Pilih siapa yang ditanya</span>
+        </div>
+        <textarea id="ask-text" placeholder="Tulis pertanyaan Anda…"></textarea>
+        <div class="toolbar" style="margin-top:10px">
+          <button class="btn primary" id="ask-send">Kirim</button>
+          <span style="flex:1"></span>
+          <button class="btn" id="cr-run" title="Tim Creative membuat 5 variasi iklan">🎨 Minta ide kreatif iklan</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= INGATAN ================= -->
+    <section class="page" id="page-ingatan">
+      <p class="page-intro">Yang diingat tim AI di setiap rapat, laporan, dan obrolan, supaya mereka melanjutkan pembahasan sebelumnya,
+        bukan mulai dari nol. <b>Arahan Anda</b> disimpan permanen. Catatan lain dirangkum otomatis setelah setiap rapat dan
+        setelah laporan harian. Di Telegram: tulis <code>ingat: …</code>, lihat dengan <code>/ingatan</code>.</p>
+      <div class="card">
+        <h2>Tambah arahan untuk tim</h2>
+        <p class="sub">Mis. “Jangan naikkan bid di atas $2”, “Fokus traffic Indonesia”, “Tes landing page baru tiap minggu”.</p>
+        <div class="toolbar">
+          <input type="text" id="mem-text" placeholder="Tulis arahan…" style="flex:1 1 320px" maxlength="500">
+          <button class="btn primary" id="mem-add">🧠 Simpan arahan</button>
+          <button class="btn" id="mem-refresh" title="Rangkum obrolan terbaru sekarang (memakai kredit AI)">🔄 Rangkum obrolan sekarang</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Isi ingatan</h2>
+        <p class="sub" id="mem-sub"></p>
+        <div class="table-wrap"><table id="tb-mem"></table></div>
+      </div>
+      <div class="grid two">
+        <div class="card"><h2>Dampak tindakan</h2><p class="sub">Angka campaign 3 hari sebelum vs sesudah tiap tindakan. Dibaca tim saat rapat.</p>
+          <pre class="code" id="mem-impact" style="min-height:0;white-space:pre-wrap"></pre></div>
+        <div class="card"><h2>Keputusan Anda atas usulan</h2><p class="sub">Tim mempelajari polanya dan tidak mengulang usulan yang Anda tolak tanpa alasan baru.</p>
+          <pre class="code" id="mem-decisions" style="min-height:0;white-space:pre-wrap"></pre></div>
+      </div>
+    </section>
+
+    <!-- ================= SCRIPT TRACKING ================= -->
+    <section class="page" id="page-tracking">
+      <p class="page-intro">Script yang ditempel di footer website supaya pendaftaran dan deposit tercatat sebagai konversi di BeMob
+        (lalu diteruskan ke RollerAds). Dibuat otomatis setiap ada campaign baru: <b>Developer</b> membuat script, <b>QA</b>
+        memeriksa kodenya dan mengetes koneksinya. Jika AI-nya gagal, AI cadangan membantu.</p>
+      <div id="tr-banners"></div>
+      <div class="card">
+        <h2>Tim yang bertugas</h2>
+        <p class="sub">Ganti AI untuk tiap tugas di <a href="#pengaturan">Pengaturan</a> → Penyedia AI &amp; pembagian tugas.</p>
+        <ul class="setup-list" id="tr-team"></ul>
+      </div>
+      <div class="card">
+        <h2>Buat script untuk website</h2>
+        <p class="sub">Tulis alamat website (atau link campaign BeMob). Supaya script lebih tepat, tempel juga potongan HTML
+          tombol daftar, form deposit, dan riwayat transaksi (klik kanan → Inspect → Copy outerHTML). Memakai kredit AI.</p>
+        <div class="toolbar">
+          <input type="text" id="tr-url" placeholder="https://domain-anda.com/" style="flex:1 1 320px" list="tr-lps">
+          <datalist id="tr-lps"></datalist>
+          <button class="btn primary" id="tr-build">🛠️ Buatkan script</button>
+        </div>
+        <textarea id="tr-hints" placeholder="(Opsional) Tempel HTML tombol daftar, form deposit, dan riwayat transaksi di sini…" style="min-height:110px"></textarea>
+      </div>
+      <div class="card">
+        <h2>🎨 Landing page buatan tim AI</h2>
+        <p class="sub" id="lpai-team">Creative menulis isi, Developer membuat HTML (semua tombol ke Click URL BeMob), QA memeriksa.
+          Anda menerima satu file HTML untuk di-upload ke hosting Anda, lalu klik <b>Sudah online</b>. Memakai kredit AI.</p>
+        <div class="toolbar">
+          <input type="text" id="lpai-site" list="lpai-sites" placeholder="Website tujuan, mis. https://domain-anda.com/" style="flex:1 1 280px">
+          <datalist id="lpai-sites"></datalist>
+          <button class="btn primary" id="lpai-build">🎨 Buatkan landing page</button>
+        </div>
+        <textarea id="lpai-brief" placeholder="(Opsional) Ide atau arahan, mis. fokus bonus member baru, warna merah-emas, tombol Daftar Sekarang…" style="min-height:70px"></textarea>
+        <div id="lpai-list"></div>
+      </div>
+      <div id="tr-sites"></div>
+    </section>
+
+    <!-- ================= LP ================= -->
+    <section class="page" id="page-lp">
+      <p class="page-intro">Landing page dan link tracking dicek otomatis tiap beberapa menit. Kalau mati, iklan tetap membayar
+        tapi pengunjung tidak bisa membuka halaman, jadi uang terbuang.</p>
+      <div class="toolbar"><button class="btn primary" id="lp-run">🔍 Cek sekarang</button></div>
+      <div class="card">
+        <h2>Status terkini</h2>
+        <div class="table-wrap"><table id="tb-health"></table></div>
+      </div>
+      <div class="card">
+        <h2>Hasil QA terakhir</h2>
+        <p class="sub" id="qa-when"></p>
+        <div id="qa"></div>
+      </div>
+    </section>
+
+    <!-- ================= BIAYA ================= -->
+    <section class="page" id="page-biaya">
+      <p class="page-intro">Perkiraan biaya pemakaian Claude AI (bukan biaya iklan). Pengecekan landing page dan perhitungan angka gratis.</p>
+      <div class="grid kpi" id="cost-kpi"></div>
+      <div class="card">
+        <h2>Biaya AI per hari</h2>
+        <p class="sub">30 hari terakhir, dalam USD</p>
+        <div class="chart-box short"><canvas id="ch-cost-day"></canvas></div>
+      </div>
+      <div class="card">
+        <h2>Biaya AI per anggota tim (bulan ini)</h2>
+        <div class="chart-box short"><canvas id="ch-cost-agent"></canvas></div>
+      </div>
+    </section>
+
+    <!-- ================= PENGATURAN ================= -->
+    <section class="page" id="page-pengaturan">
+      <p class="page-intro">Semua pengaturan program ada di sini. Isi, klik <b>Tes</b> untuk memastikan benar, lalu
+        <b>Simpan</b>. Perubahan berlaku setelah program dijalankan ulang (ada tombolnya).</p>
+      <div id="set-restart"></div>
+      <div class="card">
+        <h2>🔐 Perangkat yang sedang login</h2>
+        <p class="sub">Sesi berakhir otomatis jika 24 jam tidak dipakai atau sudah 7 hari. Ganti password di bagian Admin dashboard di bawah.</p>
+        <div class="table-wrap"><table id="tb-sessions"></table></div>
+        <div class="toolbar" style="margin:12px 0 0">
+          <button class="btn" id="logout-others">Keluarkan perangkat lain</button>
+          <button class="btn danger" id="logout-me">🚪 Keluar dari perangkat ini</button>
+        </div>
+      </div>
+      <div id="set-groups"></div>
+      <div class="savebar" id="set-savebar" hidden>
+        <span>Ada perubahan yang belum disimpan.</span>
+        <span style="flex:1"></span>
+        <button class="btn" id="set-reset">Batalkan</button>
+        <button class="btn primary" id="set-save">💾 Simpan pengaturan</button>
+      </div>
+    </section>
+
+    <!-- ================= BANTUAN ================= -->
+    <section class="page" id="page-bantuan">
+      <div class="grid two">
+        <div class="card">
+          <h2>Status pemasangan</h2>
+          <p class="sub">Yang masih ✕ bisa diisi di menu <a href="#pengaturan">Pengaturan</a>.</p>
+          <ul class="setup-list" id="setup-list"></ul>
+        </div>
+        <div class="card">
+          <h2>Batas pengaman aktif</h2>
+          <p class="sub">Usulan AI di luar batas ini otomatis ditolak. Ubah di menu <a href="#pengaturan">Pengaturan</a>.</p>
+          <div class="table-wrap"><table id="tb-limits"></table></div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Unggah laporan BeMob (CSV)</h2>
+        <p class="sub">Dipakai jika sumber data = CSV (menu Pengaturan). Export laporan BeMob yang dikelompokkan per zone, lalu unggah di sini.</p>
+        <div class="toolbar">
+          <input type="file" id="csv-file" accept=".csv">
+          <button class="btn primary" id="csv-upload">Unggah</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Kamus istilah</h2>
+        <dl class="glossary">
+          <dt>Spend / Biaya</dt><dd>Uang yang sudah dibayarkan ke RollerAds untuk menayangkan iklan.</dd>
+          <dt>Revenue / Pendapatan</dt><dd>Uang yang dihasilkan dari konversi (dari data tracker BeMob).</dd>
+          <dt>Profit</dt><dd>Pendapatan dikurangi biaya. Positif = untung, negatif = rugi.</dd>
+          <dt>ROI</dt><dd>Persentase untung dari biaya. ROI 50% = setiap $1 menghasilkan untung $0,50. ROI −100% = uang habis tanpa hasil.</dd>
+          <dt>Visits</dt><dd>Jumlah pengunjung yang datang dari iklan.</dd>
+          <dt>Konversi</dt><dd>Pengunjung yang melakukan aksi yang dihitung (daftar, deposit, dll.).</dd>
+          <dt>CPA</dt><dd>Cost per action: rata-rata biaya untuk mendapat 1 konversi. Makin kecil makin baik.</dd>
+          <dt>Zone</dt><dd>Situs/penempatan tempat iklan tampil. Satu campaign tampil di banyak zone.</dd>
+          <dt>Blacklist</dt><dd>Memblokir zone agar iklan tidak tampil lagi di sana. Dipakai untuk zone boros.</dd>
+          <dt>Bid</dt><dd>Harga yang Anda tawarkan per tayangan/klik. Bid lebih tinggi = traffic lebih banyak tapi lebih mahal.</dd>
+          <dt>Landing page (LP)</dt><dd>Halaman yang dibuka pengunjung setelah melihat iklan.</dd>
+          <dt>Postback</dt><dd>Sinyal otomatis dari tracker ke RollerAds saat terjadi konversi.</dd>
+        </dl>
+      </div>
+    </section>
+  </main>
+</div>
+<div id="toast"></div>
+
+<script>
+"use strict";
+// ============================================================ utilities
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+// Format angka dolar ala en-US ($1,234.56) agar sama dengan teks evaluasi & laporan AI.
+const numFmt = new Intl.NumberFormat("en-US");
+const money = v => v == null ? "–" : (v < 0 ? "−$" : "$") + Math.abs(v).toLocaleString("en-US", {minimumFractionDigits: 2, maximumFractionDigits: 2});
+const pct = v => v == null ? "–" : `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(0)}%`;
+const num = v => v == null ? "–" : numFmt.format(v);
+const timeFmt = ts => ts ? new Date(ts * 1000).toLocaleString("id-ID", {day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit"}) : "–";
+const cssVar = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+async function api(path, opts = {}) {
+  const init = {...opts};
+  if (opts.body && !(opts.body instanceof FormData)) {
+    init.headers = {"Content-Type": "application/json"};
+    init.body = JSON.stringify(opts.body);
+  }
+  const res = await fetch(path, init);
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401 && data.login) {  // sesi habis / sudah logout di tempat lain
+    location.replace("/login");
+    throw new Error(data.error);
+  }
+  if (!res.ok) throw new Error(data.error || `Gagal (HTTP ${res.status})`);
+  return data;
+}
+
+async function logout() {
+  try { await api("/api/logout", {method: "POST"}); } catch (e) { /* tetap arahkan ke halaman login */ }
+  location.replace("/login");
+}
+$("#nav-logout").onclick = e => { e.preventDefault(); if (confirm("Keluar dari dashboard?")) logout(); };
+
+async function loadSessions() {
+  const {sessions} = await api("/api/auth/sessions");
+  $("#tb-sessions").innerHTML = `<thead><tr><th>Perangkat</th><th>IP</th><th>Login</th><th>Terakhir aktif</th></tr></thead>
+    <tbody>${sessions.map(s => `<tr><td style="white-space:normal;max-width:360px">${s.current ? "<b>Perangkat ini</b> · " : ""}${esc(s.agent || "-")}</td>
+      <td>${esc(s.ip)}</td><td>${timeFmt(s.created)}</td><td>${timeFmt(s.last)}</td></tr>`).join("")}</tbody>`;
+}
+
+let toastTimer;
+function toast(msg) {
+  const el = $("#toast");
+  el.textContent = msg;
+  el.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove("show"), 3500);
+}
+
+async function withBusy(btn, fn) {
+  const old = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = "⏳ Memproses…";
+  try { await fn(); } catch (e) { toast("⚠️ " + e.message); } finally { btn.disabled = false; btn.innerHTML = old; }
+}
+
+const LEVEL = {
+  good: {icon: "✓", label: "Bagus"},
+  warning: {icon: "!", label: "Perhatian"},
+  critical: {icon: "✕", label: "Kritis"},
+  info: {icon: "i", label: "Info"},
+};
+
+function roiBadge(roi) {
+  if (roi == null) return `<span class="badge">–</span>`;
+  const lvl = roi >= 0 ? "good" : roi <= -50 ? "critical" : "warning";
+  return `<span class="badge ${lvl}">${roi >= 0 ? "▲" : "▼"} ${pct(roi)}</span>`;
+}
+
+// ============================================================ theme
+function applyTheme(t) {
+  if (t) document.documentElement.setAttribute("data-theme", t);
+  else document.documentElement.removeAttribute("data-theme");
+}
+try { applyTheme(localStorage.getItem("theme")); } catch (e) {}
+$("#theme-toggle").onclick = () => {
+  const dark = document.documentElement.getAttribute("data-theme") === "dark" ||
+    (!document.documentElement.getAttribute("data-theme") && matchMedia("(prefers-color-scheme: dark)").matches);
+  const next = dark ? "light" : "dark";
+  applyTheme(next);
+  try { localStorage.setItem("theme", next); } catch (e) {}
+  refresh();
+};
+
+// ============================================================ charts
+const charts = {};
+function chartBase() {
+  return {
+    responsive: true, maintainAspectRatio: false, animation: false,
+    interaction: {mode: "index", intersect: false},
+    plugins: {
+      legend: {labels: {color: cssVar("--ink-2"), boxWidth: 12, boxHeight: 12, usePointStyle: true}},
+      tooltip: {
+        backgroundColor: cssVar("--surface"), titleColor: cssVar("--ink"), bodyColor: cssVar("--ink-2"),
+        borderColor: cssVar("--border"), borderWidth: 1, padding: 10,
+        callbacks: {label: c => ` ${c.dataset.label}: ${money(c.chart.options.indexAxis === "y" ? c.parsed.x : c.parsed.y)}`},
+      },
+    },
+    scales: {
+      x: {grid: {display: false}, border: {color: cssVar("--axis")}, ticks: {color: cssVar("--muted"), maxRotation: 0, autoSkip: true}},
+      y: {beginAtZero: true, grid: {color: cssVar("--grid")}, border: {display: false}, ticks: {color: cssVar("--muted"), callback: v => money(v)}},
+    },
+  };
+}
+function drawChart(id, config) {
+  if (charts[id]) charts[id].destroy();
+  if (typeof Chart === "undefined") {
+    return showEmpty(id, "Grafik tidak bisa dimuat (butuh internet). Data tetap ada di tabel.");
+  }
+  charts[id] = new Chart(document.getElementById(id), config);
+}
+function showEmpty(id, text) {
+  if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+  const canvas = document.getElementById(id);
+  const box = canvas.parentElement;
+  let note = box.querySelector(".empty");
+  if (!note) { note = document.createElement("div"); note.className = "empty"; box.appendChild(note); }
+  note.textContent = text;
+  canvas.style.display = "none";
+}
+function unhide(id) {
+  const canvas = document.getElementById(id);
+  canvas.style.display = "";
+  canvas.parentElement.querySelector(".empty")?.remove();
+}
+function lineChart(id, labels, series) {
+  unhide(id);
+  drawChart(id, {
+    type: "line",
+    data: {labels, datasets: series.map(s => ({
+      label: s.label, data: s.data, borderColor: s.color, backgroundColor: s.color,
+      borderWidth: 2, pointRadius: labels.length < 3 ? 4 : 0, pointHoverRadius: 5, tension: 0.25,
+    }))},
+    options: chartBase(),
+  });
+}
+function divergingBar(id, labels, values, label, horizontal = false) {
+  unhide(id);
+  const pos = cssVar("--pos"), neg = cssVar("--neg");
+  const opts = chartBase();
+  opts.plugins.legend.display = false;
+  if (horizontal) {
+    opts.indexAxis = "y";
+    opts.interaction = {mode: "nearest", axis: "y", intersect: false};
+    [opts.scales.x, opts.scales.y] = [opts.scales.y, opts.scales.x];
+    opts.scales.x.grid = {color: cssVar("--grid")};
+    opts.scales.y.grid = {display: false};
+  }
+  drawChart(id, {
+    type: "bar",
+    data: {labels, datasets: [{
+      label, data: values, backgroundColor: values.map(v => v >= 0 ? pos : neg),
+      borderRadius: 4, borderSkipped: false, maxBarThickness: 28,
+    }]},
+    options: opts,
+  });
+}
+
+// ============================================================ state & routing
+const TITLES = {
+  ringkasan: "Ringkasan", campaign: "Campaign", rollerads: "RollerAds", zone: "Zone", tren: "Tren", usulan: "Usulan & Tugas",
+  rapat: "Rapat & Laporan", tanya: "Tanya Tim", ingatan: "Ingatan Tim", tracking: "Script Tracking", lp: "Landing Page", biaya: "Biaya AI", pengaturan: "Pengaturan",
+  bantuan: "Bantuan",
+};
+let current = "ringkasan";
+let ov = null;       // data overview terakhir
+let zoneRows = [];
+let zoneFilter = "all";
+let zoneSort = {key: "profit", dir: 1};
+let feedTopic = "";
+let topicsMap = {};
+
+function go() {
+  const page = (location.hash || "#ringkasan").slice(1);
+  current = TITLES[page] ? page : "ringkasan";
+  $$("section.page").forEach(s => s.classList.toggle("active", s.id === "page-" + current));
+  $$("#nav a").forEach(a => a.classList.toggle("active", a.dataset.page === current));
+  $("#page-title").textContent = TITLES[current];
+  refresh();
+}
+window.addEventListener("hashchange", go);
+
+async function refresh() {
+  try {
+    ov = await api("/api/overview");
+    renderHeader();
+    const fn = PAGES[current];
+    if (fn) await fn();
+    $("#pill-updated").textContent = "Diperbarui " + new Date().toLocaleTimeString("id-ID", {hour: "2-digit", minute: "2-digit"});
+  } catch (e) {
+    $("#pill-updated").innerHTML = `<span class="dot" style="background:var(--critical)"></span> Program tidak merespons`;
+    toast("⚠️ " + e.message);
+  }
+}
+
+function renderHeader() {
+  const demo = ov.data_source === "demo";
+  $("#pill-data").innerHTML = demo
+    ? `<span class="dot" style="background:var(--warning)"></span> DATA DEMO`
+    : `<span class="dot" style="background:var(--good)"></span> Data: ${esc(ov.data_source)}`;
+  $("#pill-telegram").innerHTML = ov.online
+    ? `<span class="dot" style="background:var(--good)"></span> Telegram terhubung`
+    : `<span class="dot" style="background:var(--muted)"></span> Telegram belum terhubung`;
+  $("#pill-auto").innerHTML = ov.paused
+    ? `<span class="dot" style="background:var(--warning)"></span> Otomatisasi DI-PAUSE`
+    : `<span class="dot" style="background:var(--good)"></span> Otomatisasi aktif`;
+  const n = ov.pending_proposals + ov.open_tasks;
+  const badge = $("#nav-count");
+  badge.hidden = !n;
+  badge.textContent = n;
+}
+
+$("#pill-auto").onclick = async () => {
+  if (!ov) return;
+  const next = !ov.paused;
+  const msg = next
+    ? "Pause otomatisasi AI (rapat & laporan otomatis)? Cek landing page dan auto-pause campaign tetap jalan. Ini TIDAK mem-pause campaign di RollerAds."
+    : "Jalankan lagi otomatisasi AI?";
+  if (!confirm(msg)) return;
+  try { await api("/api/pause", {method: "POST", body: {paused: next}}); toast(next ? "⏸️ Otomatisasi di-pause" : "▶️ Otomatisasi berjalan lagi"); refresh(); }
+  catch (e) { toast("⚠️ " + e.message); }
+};
+
+// ============================================================ pages
+const PAGES = {};
+
+PAGES.ringkasan = async () => {
+  // banners
+  const banners = [];
+  if (ov.data_error) banners.push(`<div class="banner critical"><strong>⚠️ Data tidak bisa diambil</strong>${esc(ov.data_error)}</div>`);
+  if (ov.data_source === "demo") banners.push(`<div class="banner warning"><strong>Anda sedang melihat DATA DEMO</strong>Angka di bawah hanya contoh untuk mencoba sistem. Ganti sumber data di menu <a href="#pengaturan">Pengaturan</a>.</div>`);
+  const missing = ov.setup.filter(s => !s.ok && s.label !== "Memakai data asli");
+  if (missing.length) banners.push(`<div class="banner info"><strong>Pemasangan belum lengkap (${missing.length} langkah)</strong>${missing.map(s => esc(s.label)).join(" · ")}. Lengkapi di menu <a href="#pengaturan">Pengaturan</a>, panduannya di <a href="#bantuan">Bantuan</a>.</div>`);
+  $("#ov-banners").innerHTML = banners.join("");
+
+  const t = ov.total;
+  if (!t) {
+    $("#ov-kpi").innerHTML = "";
+    $("#ov-insights").innerHTML = `<li class="info"><span class="ic info">i</span><div><div class="t">Belum ada data</div></div></li>`;
+    $("#ov-meter").innerHTML = "";
+  } else {
+    const tiles = [
+      ["Biaya iklan (spend)", money(t.cost), "Uang yang sudah dibayar ke RollerAds hari ini"],
+      ["Pendapatan", money(t.revenue), "Uang yang dihasilkan dari konversi hari ini"],
+      ["Profit", `<span class="${t.profit >= 0 ? "up" : "down"}">${t.profit >= 0 ? "▲" : "▼"} ${money(t.profit)}</span>`, "Pendapatan − biaya. Positif = untung"],
+      ["ROI", `<span class="${(t.roi ?? 0) >= 0 ? "up" : "down"}">${pct(t.roi)}</span>`, "Persentase untung dari biaya"],
+      ["Konversi", num(t.conversions), `dari ${num(t.visits)} pengunjung`],
+      ["CPA", money(t.cpa), "Biaya rata-rata untuk 1 konversi"],
+    ];
+    $("#ov-kpi").innerHTML = tiles.map(([label, value, help]) =>
+      `<div class="tile"><div class="label">${label} <span class="help" title="${esc(help)}">?</span></div><div class="value">${value}</div></div>`).join("");
+
+    $("#ov-insights").innerHTML = ov.insights.map(i =>
+      `<li class="${i.level}"><span class="ic ${i.level}">${LEVEL[i.level].icon}</span><div>
+        <div class="t"><span class="tag">${LEVEL[i.level].label}</span>${esc(i.title)}</div>
+        <div class="d">${esc(i.text)}</div></div></li>`).join("");
+
+    const limit = ov.limits.max_daily_spend;
+    const used = limit ? t.cost / limit * 100 : 0;
+    const lvl = used >= 100 ? "critical" : used >= 80 ? "warning" : "good";
+    $("#ov-meter").innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:baseline">
+        <span style="font-size:22px;font-weight:650">${used.toFixed(0)}%</span>
+        <span class="badge ${lvl}">${LEVEL[lvl].icon} ${lvl === "good" ? "Aman" : LEVEL[lvl].label}</span>
+      </div>
+      <div class="meter"><div style="width:${Math.min(used, 100)}%;background:var(--${lvl})"></div></div>
+      <div class="sub" style="margin:0">${money(t.cost)} dari batas ${money(limit)} per hari</div>`;
+  }
+
+  const down = ov.health.filter(h => !h.ok).length;
+  $("#ov-shortcuts").innerHTML = [
+    ["#usulan", ov.pending_proposals, "usulan menunggu keputusan", ov.pending_proposals ? "warning" : ""],
+    ["#usulan", ov.open_tasks, "tugas manual belum dikerjakan", ov.open_tasks ? "warning" : ""],
+    ["#lp", ov.health.length ? (down ? `${down} mati` : "Semua aktif") : "–", "status landing page & tracking", down ? "critical" : ""],
+    ["#biaya", money(ov.ai_cost.today), "biaya AI hari ini", ""],
+    ["#zone", ov.bad_zones ?? "–", `zone boros (${money(ov.bad_zones_cost)})`, ov.bad_zones ? "warning" : ""],
+    ["#rapat", ov.meeting_running ? "Sedang rapat" : timeFmt(ov.last_meeting), "rapat tim terakhir", ""],
+  ].map(([href, big, small, lvl]) =>
+    `<a class="shortcut" href="${href}"><div class="big ${lvl === "critical" ? "down" : ""}">${esc(big)}</div><div class="small">${esc(small)}</div></a>`).join("");
+
+  const trend = await api("/api/trend");
+  if (!trend.today.length) return showEmpty("ch-today", "Riwayat hari ini belum ada. Grafik terisi otomatis setiap 10 menit.");
+  lineChart("ch-today", trend.today.map(p => p.label), [
+    {label: "Pendapatan", data: trend.today.map(p => p.revenue), color: cssVar("--series-1")},
+    {label: "Biaya iklan", data: trend.today.map(p => p.cost), color: cssVar("--series-2")},
+  ]);
+};
+
+PAGES.campaign = async () => {
+  const rows = ov.campaigns || [];
+  if (!rows.length) {
+    showEmpty("ch-campaign", ov.data_error || "Belum ada data campaign.");
+    $("#tb-campaign").innerHTML = "";
+    return;
+  }
+  const sorted = [...rows].sort((a, b) => b.profit - a.profit);
+  $("#ch-campaign").parentElement.style.height = Math.max(160, sorted.length * 44 + 60) + "px";
+  divergingBar("ch-campaign", sorted.map(r => r.name), sorted.map(r => r.profit), "Profit", true);
+  $("#tb-campaign").innerHTML = `<thead><tr><th>Campaign</th><th class="num">Visits</th><th class="num">Konversi</th>
+    <th class="num">Spend</th><th class="num">Pendapatan</th><th class="num">Profit</th><th class="num">ROI</th><th class="num">CPA</th><th>Penilaian</th></tr></thead>
+    <tbody>${sorted.map(r => {
+      const verdict = r.roi == null ? ["", "Belum ada spend"]
+        : r.roi >= ov.limits.zone_good_roi ? ["good", "Bagus, bisa di-scale"]
+        : r.roi >= 0 ? ["info", "Untung tipis"]
+        : ["critical", "Rugi, perlu optimasi"];
+      return `<tr><td><b>${esc(r.name)}</b></td><td class="num">${num(r.visits)}</td><td class="num">${num(r.conversions)}</td>
+        <td class="num">${money(r.cost)}</td><td class="num">${money(r.revenue)}</td>
+        <td class="num ${r.profit >= 0 ? "up" : "down"}">${money(r.profit)}</td><td class="num">${roiBadge(r.roi)}</td>
+        <td class="num">${money(r.cpa)}</td><td><span class="badge ${verdict[0]}">${verdict[1]}</span></td></tr>`;
+    }).join("")}</tbody>`;
+};
+
+// ============================================================ rollerads
+let raFormats = null;
+
+function raFillFormats(formats, limits, lps) {
+  raFormats = formats;
+  $("#ra-format").innerHTML = formats.map(f => `<option value="${f.id}">${esc(f.name)}</option>`).join("");
+  $("#ra-lps").innerHTML = lps.map(u => `<option value="${esc(u)}">`).join("");
+  $("#ra-bid-help").textContent = `Maks ${money(limits.max_bid)} (batas pengaman).`;
+  $("#ra-budget-help").textContent = `Wajib, maks ${money(limits.max_daily_budget)}.`;
+  raFormatChanged();
+}
+
+function raFormatChanged(bidModel) {
+  const f = raFormats.find(x => String(x.id) === $("#ra-format").value) || raFormats[0];
+  $("#ra-bidmodel").innerHTML = f.bid_models.map(b => `<option value="${b.id}">${esc(b.name)}</option>`).join("");
+  if (bidModel) $("#ra-bidmodel").value = bidModel;
+  $$("[data-creative]").forEach(el => { el.hidden = !f.creative; });
+}
+$("#ra-format").onchange = () => raFormatChanged();
+
+function raFlowChanged() {
+  const lander = $("#ra-flow").value === "lander";
+  $$("[data-lander]").forEach(el => { el.hidden = !lander; });
+  $("#ra-site-label").textContent = lander ? "Website tujuan: tempat daftar/deposit (wajib, script konversi dipasang di sini)"
+    : "Website tempat script tracking dipasang (opsional)";
+}
+$("#ra-flow").onchange = raFlowChanged;
+
+function raSpec() {
+  const data = Object.fromEntries(new FormData($("#ra-form")));
+  return {...data, format_id: +data.format_id, bid_model_id: +data.bid_model_id, bid: +data.bid,
+    daily_budget: +data.daily_budget, total_budget: +data.total_budget || 0,
+    countries: data.countries.split(/[\s,;]+/).filter(Boolean)};
+}
+
+function raShowErrors(errors) {
+  $("#ra-errors").innerHTML = (errors || []).map(e => `<li>${esc(e)}</li>`).join("");
+}
+
+PAGES.rollerads = async () => {
+  const d = await api("/api/rollerads");
+  if (!raFormats) raFillFormats(d.formats, d.limits, d.landing_pages);
+  const banners = [];
+  if (!d.enabled) banners.push(`<div class="banner warning"><strong>RollerAds API belum tersambung</strong>Isi token API RollerAds di menu <a href="#pengaturan">Pengaturan</a> → Sumber data.</div>`);
+  if (d.error) banners.push(`<div class="banner critical"><strong>⚠️ RollerAds tidak bisa dibaca</strong>${esc(d.error)}</div>`);
+  if (d.enabled && !d.autopause.enabled) banners.push(`<div class="banner warning"><strong>Auto-pause sedang MATI</strong>Campaign boros tidak akan di-pause otomatis. Aktifkan di <a href="#pengaturan">Pengaturan</a>.</div>`);
+  $("#ra-banners").innerHTML = banners.join("");
+
+  const cs = d.campaigns;
+  const active = cs.filter(c => c.status === "active").length;
+  const cost = cs.reduce((s, c) => s + c.cost, 0);
+  $("#ra-kpi").innerHTML = d.account ? [
+    ["Saldo RollerAds", money(d.account.balance), d.account.title],
+    ["Campaign aktif", `${active} / ${cs.length}`, "Tanpa campaign archived"],
+    ["Spend hari ini", money(cost), `Batas akun ${money(d.autopause.daily_spend)}`],
+    ["Auto-pause", d.autopause.enabled ? `<span class="up">Aktif</span>` : `<span class="down">Mati</span>`, `Dicek tiap ${d.autopause.minutes} menit`],
+  ].map(([l, v, n]) => `<div class="tile"><div class="label">${l}</div><div class="value">${v}</div><div class="note">${esc(n)}</div></div>`).join("") : "";
+
+  const ST = {active: ["good", "🟢 Aktif"], paused: ["warning", "⏸️ Paused"], stopped: ["", "⏹️ Stopped"]};
+  $("#tb-ra").innerHTML = cs.length ? `<thead><tr><th>Campaign</th><th>Format</th><th>Status</th><th class="num">Visits</th>
+    <th class="num">Konversi</th><th class="num">Spend</th><th class="num">CPA</th><th></th></tr></thead>
+    <tbody>${cs.map(c => `<tr><td><b>${esc(c.title)}</b><div class="sub" style="margin:0">#${c.id} · ${esc(c.bid_model)}</div></td>
+      <td>${esc(c.format)}</td>
+      <td><span class="badge ${(ST[c.status] || ["", c.status])[0]}">${(ST[c.status] || ["", esc(c.status)])[1]}</span>
+        ${c.autopaused ? `<div class="sub" style="margin:4px 0 0;white-space:normal;max-width:260px">Auto-pause hari ini: ${esc(c.autopaused)}</div>` : ""}</td>
+      <td class="num">${num(c.visits)}</td><td class="num">${num(c.conversions)}</td><td class="num">${money(c.cost)}</td>
+      <td class="num">${money(c.cpa)}</td>
+      <td>${c.status === "active" ? `<button class="btn danger" data-rastatus="paused" data-id="${c.id}" data-title="${esc(c.title)}">⏸️ Pause</button>`
+        : c.status === "paused" ? `<button class="btn good" data-rastatus="active" data-id="${c.id}" data-title="${esc(c.title)}">▶️ Aktifkan</button>` : ""}</td></tr>`).join("")}</tbody>`
+    : `<tbody><tr><td class="empty">${d.enabled && !d.error ? "Belum ada campaign aktif/paused. Buat di bawah." : "–"}</td></tr></tbody>`;
+  $$("[data-rastatus]").forEach(b => b.onclick = () => {
+    const pause = b.dataset.rastatus === "paused";
+    if (!confirm(`${pause ? "Pause" : "Aktifkan"} campaign ${b.dataset.title}?`)) return;
+    withBusy(b, async () => {
+      await api(`/api/rollerads/campaigns/${b.dataset.id}/status`, {method: "POST", body: {status: b.dataset.rastatus}});
+      toast(pause ? "⏸️ Campaign di-pause." : "▶️ Campaign diaktifkan.");
+      await refresh();
+    });
+  });
+
+  const a = d.autopause;
+  $("#ra-rules").innerHTML = [
+    `Spend seluruh akun hari ini ≥ ${money(a.daily_spend)} → semua campaign aktif di-pause`,
+    `Spend satu campaign hari ini ≥ ${money(a.campaign_budget)} (tidak wajar)`,
+    `Spend ≥ ${money(a.min_spend)} tanpa satu pun konversi`,
+    a.max_cpa ? `Spend ≥ ${money(a.min_spend)} dan CPA > ${money(a.max_cpa)}` : null,
+    a.payout ? `Spend ≥ ${money(a.min_spend)} dan ROI < ${a.min_roi}% (payout ${money(a.payout)}/konversi)` : null,
+  ].filter(Boolean).map(t => `<li><span class="down">■</span><span>${esc(t)}</span></li>`).join("")
+    + `<li><span class="up">✓</span><span class="hint">Campaign yang Anda aktifkan lagi setelah di-pause otomatis tidak di-pause ulang hari itu.</span></li>`;
+
+  const ACT = {paused: ["warning", "Pause"], active: ["good", "Aktifkan"], created: ["info", "Dibuat"],
+    blacklist: ["warning", "Blacklist zone"], bid: ["info", "Ubah bid"], budget: ["info", "Ubah budget"]};
+  $("#tb-ra-log").innerHTML = d.log.length ? `<thead><tr><th>Waktu</th><th>Campaign</th><th>Tindakan</th><th>Oleh / alasan</th></tr></thead>
+    <tbody>${d.log.map(l => `<tr><td>${timeFmt(l.ts)}</td><td>${esc(l.title)}</td>
+      <td><span class="badge ${(ACT[l.action] || [""])[0]}">${(ACT[l.action] || ["", esc(l.action)])[1]}</span></td>
+      <td style="white-space:normal;min-width:200px">${esc(l.by)}${l.reason ? `<div class="sub" style="margin:0">${esc(l.reason)}</div>` : ""}</td></tr>`).join("")}</tbody>`
+    : `<tbody><tr><td class="empty">Belum ada tindakan.</td></tr></tbody>`;
+};
+
+$("#ra-check").onclick = e => withBusy(e.currentTarget, async () => {
+  const {paused} = await api("/api/rollerads/autopause/run", {method: "POST"});
+  toast(paused.length ? `⏸️ ${paused.length} campaign di-pause.` : "✓ Semua campaign aktif masih dalam batas.");
+  await refresh();
+});
+
+$("#ra-draft").onclick = e => withBusy(e.currentTarget, async () => {
+  const brief = $("#ra-brief").value.trim();
+  if (!brief) return toast("Tulis permintaannya dulu.");
+  const {spec, errors} = await api("/api/rollerads/draft", {method: "POST", body: {brief}});
+  const form = $("#ra-form");
+  $("#ra-format").value = spec.format_id || raFormats[0].id;
+  raFormatChanged(spec.bid_model_id);
+  for (const [k, v] of Object.entries(spec)) {
+    if (["format_id", "bid_model_id"].includes(k) || !form.elements[k]) continue;
+    form.elements[k].value = Array.isArray(v) ? v.join(", ") : v;
+  }
+  raShowErrors(errors);
+  toast(errors.length ? "🎯 Form terisi. Lengkapi yang masih kurang (lihat daftar merah)." : "🎯 Form terisi. Periksa lalu klik Buat campaign.");
+});
+
+$("#ra-create").onclick = e => {
+  const spec = raSpec();
+  if (!confirm(`Buat campaign "${spec.title}" di RollerAds dengan status ${spec.status === "active" ? "LANGSUNG AKTIF" : "paused"}?`)) return;
+  withBusy(e.currentTarget, async () => {
+    try {
+      const res = await api("/api/rollerads/campaigns", {method: "POST", body: {spec}});
+      raShowErrors([]);
+      $("#ra-form").reset(); raFormatChanged(); raFlowChanged();
+      toast(`🚀 Campaign dibuat (#${res.id}).`);
+      await refresh();
+    } catch (err) {
+      raShowErrors(err.message.split(/(?<=\.) (?=[A-Z])/));
+      throw err;
+    }
+  });
+};
+$("#ra-reset").onclick = () => { $("#ra-form").reset(); raFormatChanged(); raFlowChanged(); raShowErrors([]); };
+
+PAGES.zone = async () => {
+  try {
+    zoneRows = (await api("/api/zones")).rows;
+  } catch (e) {
+    zoneRows = [];
+    $("#z-summary").textContent = e.message;
+  }
+  const sel = $("#z-campaign");
+  const chosen = sel.value;
+  const names = [...new Set(zoneRows.map(r => r.campaign))].sort();
+  sel.innerHTML = `<option value="">Semua campaign</option>` + names.map(n => `<option ${n === chosen ? "selected" : ""}>${esc(n)}</option>`).join("");
+  renderZones();
+};
+
+function visibleZones() {
+  const q = $("#z-search").value.trim().toLowerCase();
+  const camp = $("#z-campaign").value;
+  const {key, dir} = zoneSort;
+  return zoneRows
+    .filter(r => zoneFilter === "all" || r.status === zoneFilter)
+    .filter(r => !camp || r.campaign === camp)
+    .filter(r => !q || r.zone.toLowerCase().includes(q))
+    .sort((a, b) => {
+      const x = a[key] ?? -Infinity, y = b[key] ?? -Infinity;
+      return (x > y ? 1 : x < y ? -1 : 0) * dir;
+    });
+}
+
+function renderZones() {
+  const rows = visibleZones();
+  const cost = rows.reduce((s, r) => s + r.cost, 0), profit = rows.reduce((s, r) => s + r.profit, 0);
+  $("#z-summary").innerHTML = `${num(rows.length)} zone · spend ${money(cost)} · profit <span class="${profit >= 0 ? "up" : "down"}">${money(profit)}</span>
+    · Boros = spend ≥ ${money(ov.limits.zone_waste)} tanpa konversi atau ROI &lt; ${ov.limits.zone_min_roi}% · Bagus = ROI ≥ ${ov.limits.zone_good_roi}% dan ≥ 2 konversi`;
+  const cols = [["zone", "Zone"], ["campaign", "Campaign"], ["status", "Status"], ["visits", "Visits", 1], ["conversions", "Konv", 1],
+    ["cost", "Spend", 1], ["revenue", "Pendapatan", 1], ["profit", "Profit", 1], ["roi", "ROI", 1]];
+  const arrow = k => zoneSort.key === k ? (zoneSort.dir > 0 ? " ▲" : " ▼") : "";
+  const STATUS = {boros: ["critical", "🔴 Boros"], bagus: ["good", "🟢 Bagus"], normal: ["", "Normal"]};
+  const shown = rows.slice(0, 300);
+  $("#tb-zone").innerHTML = `<thead><tr>${cols.map(([k, l, n]) => `<th class="sortable ${n ? "num" : ""}" data-sort="${k}">${l}${arrow(k)}</th>`).join("")}</tr></thead>
+    <tbody>${shown.map(r => `<tr><td><b>${esc(r.zone)}</b></td><td>${esc(r.campaign)}</td>
+      <td><span class="badge ${STATUS[r.status][0]}">${STATUS[r.status][1]}</span>${r.proposed ? ` <span class="badge info" title="Sudah masuk usulan dalam 24 jam terakhir">diusulkan</span>` : ""}</td>
+      <td class="num">${num(r.visits)}</td><td class="num">${num(r.conversions)}</td><td class="num">${money(r.cost)}</td>
+      <td class="num">${money(r.revenue)}</td><td class="num ${r.profit >= 0 ? "up" : "down"}">${money(r.profit)}</td>
+      <td class="num">${roiBadge(r.roi)}</td></tr>`).join("") || `<tr><td colspan="9" class="empty">Tidak ada zone yang cocok.</td></tr>`}
+    ${rows.length > shown.length ? `<tr><td colspan="9" class="empty">Menampilkan 300 dari ${num(rows.length)} zone. Pakai filter atau pencarian.</td></tr>` : ""}</tbody>`;
+  $$("#tb-zone th[data-sort]").forEach(th => th.onclick = () => {
+    const k = th.dataset.sort;
+    zoneSort = {key: k, dir: zoneSort.key === k ? -zoneSort.dir : (["zone", "campaign", "status"].includes(k) ? 1 : -1)};
+    renderZones();
+  });
+}
+$$("[data-zfilter]").forEach(b => b.onclick = () => {
+  zoneFilter = b.dataset.zfilter;
+  $$("[data-zfilter]").forEach(x => x.classList.toggle("active", x === b));
+  if (zoneFilter === "boros") zoneSort = {key: "profit", dir: 1};
+  if (zoneFilter === "bagus") zoneSort = {key: "profit", dir: -1};
+  renderZones();
+});
+$("#z-search").oninput = renderZones;
+$("#z-campaign").onchange = renderZones;
+$("#z-copy").onclick = async () => {
+  const ids = visibleZones().map(r => r.zone);
+  if (!ids.length) return toast("Tidak ada zone untuk disalin.");
+  const text = ids.join(",");
+  try { await navigator.clipboard.writeText(text); }
+  catch (e) {
+    const ta = document.createElement("textarea");
+    ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove();
+  }
+  toast(`📋 ${ids.length} ID zone disalin. Tempel di kolom blacklist RollerAds.`);
+};
+
+PAGES.tren = async () => {
+  const {daily} = await api("/api/trend");
+  if (!daily.length) {
+    showEmpty("ch-daily-profit", "Belum ada riwayat. Data harian terkumpul otomatis selama program berjalan.");
+    showEmpty("ch-daily-cr", "Belum ada riwayat.");
+    $("#tb-daily").innerHTML = "";
+    return;
+  }
+  const labels = daily.map(d => new Date(d.label + "T00:00:00").toLocaleDateString("id-ID", {day: "2-digit", month: "short"}));
+  divergingBar("ch-daily-profit", labels, daily.map(d => d.profit), "Profit");
+  lineChart("ch-daily-cr", labels, [
+    {label: "Pendapatan", data: daily.map(d => d.revenue), color: cssVar("--series-1")},
+    {label: "Biaya iklan", data: daily.map(d => d.cost), color: cssVar("--series-2")},
+  ]);
+  $("#tb-daily").innerHTML = `<thead><tr><th>Tanggal</th><th class="num">Visits</th><th class="num">Konversi</th><th class="num">Spend</th>
+    <th class="num">Pendapatan</th><th class="num">Profit</th><th class="num">ROI</th></tr></thead>
+    <tbody>${[...daily].reverse().map((d, i) => `<tr><td>${labels[daily.length - 1 - i]}</td><td class="num">${num(d.visits)}</td>
+      <td class="num">${num(d.conversions)}</td><td class="num">${money(d.cost)}</td><td class="num">${money(d.revenue)}</td>
+      <td class="num ${d.profit >= 0 ? "up" : "down"}">${money(d.profit)}</td><td class="num">${roiBadge(d.roi)}</td></tr>`).join("")}</tbody>`;
+};
+
+PAGES.usulan = async () => {
+  const [{items: props}, {items: tasks}] = await Promise.all([api("/api/proposals"), api("/api/tasks")]);
+  const pending = props.filter(p => p.status === "pending");
+  $("#pr-pending").innerHTML = pending.length ? pending.map(p => `
+    <div class="proposal">
+      <div class="head"><b>Usulan #${p.id}</b><span class="badge warning">Menunggu</span><span class="sub" style="margin:0">${timeFmt(p.created)}</span></div>
+      <pre>${esc(p.text)}</pre>
+      <div class="actions">
+        <button class="btn good" data-decide="${p.id}" data-approved="1">✅ Setuju</button>
+        <button class="btn danger" data-decide="${p.id}" data-approved="0">❌ Tolak</button>
+      </div>
+    </div>`).join("") : `<div class="empty">Tidak ada usulan yang menunggu. 👍</div>`;
+
+  const open = tasks.filter(t => t.status === "open");
+  $("#tk-open").innerHTML = open.length ? open.map(t => `
+    <div class="proposal">
+      <div class="head"><b>Tugas #${t.id}</b><span class="sub" style="margin:0">${timeFmt(t.created)}</span></div>
+      <pre>${esc(t.text)}</pre>
+      <div class="actions"><button class="btn primary" data-done="${t.id}">✔️ Sudah dikerjakan</button></div>
+    </div>`).join("") : `<div class="empty">Semua tugas sudah dikerjakan. 👍</div>`;
+
+  const ST = {pending: ["warning", "Menunggu"], approved: ["good", "Disetujui"], rejected: ["critical", "Ditolak"]};
+  $("#tb-proposals").innerHTML = props.length ? `<thead><tr><th>#</th><th>Waktu</th><th>Status</th><th>Isi usulan</th></tr></thead>
+    <tbody>${props.map(p => `<tr><td>${p.id}</td><td>${timeFmt(p.created)}</td><td><span class="badge ${ST[p.status][0]}">${ST[p.status][1]}</span></td>
+      <td style="white-space:normal;min-width:280px">${esc(p.text.split("\nAlasan:")[0].replace(/\n/g, " "))}</td></tr>`).join("")}</tbody>`
+    : `<tbody><tr><td class="empty">Belum ada usulan. Mulai rapat di menu Rapat &amp; Laporan.</td></tr></tbody>`;
+
+  $$("[data-decide]").forEach(b => b.onclick = () => withBusy(b, async () => {
+    const approved = b.dataset.approved === "1";
+    await api(`/api/proposals/${b.dataset.decide}`, {method: "POST", body: {approved}});
+    toast(approved ? "✅ Disetujui. Hasilnya muncul di Telegram / riwayat." : "❌ Usulan ditolak.");
+    await refresh();
+  }));
+  $$("[data-done]").forEach(b => b.onclick = () => withBusy(b, async () => {
+    await api(`/api/tasks/${b.dataset.done}/done`, {method: "POST"});
+    toast("✔️ Tugas tercatat selesai.");
+    await refresh();
+  }));
+};
+
+PAGES.rapat = async () => {
+  const {items, topics} = await api(`/api/feed?topic=${encodeURIComponent(feedTopic)}&limit=150`);
+  topicsMap = {...topics, dashboard: "🙋 Tanya Tim (dashboard)"};
+  $("#feed-topics").innerHTML = [["", "Semua"], ...Object.entries(topicsMap)].map(([k, v]) =>
+    `<button class="chip ${k === feedTopic ? "active" : ""}" data-topic="${k}">${esc(v)}</button>`).join("");
+  $$("[data-topic]").forEach(b => b.onclick = () => { feedTopic = b.dataset.topic; PAGES.rapat(); });
+  $("#mt-status").innerHTML = ov.meeting_running
+    ? `<span class="badge warning">⏳ Rapat sedang berjalan…</span> Halaman ini diperbarui otomatis.`
+    : `Rapat terakhir: ${timeFmt(ov.last_meeting)}`;
+  $("#feed").innerHTML = items.length ? items.map(m => `
+    <div class="msg"><div class="meta"><span class="who">${esc(m.speaker)}</span>
+      <span class="badge">${esc(topicsMap[m.topic] || "Umum")}</span><span class="when">${timeFmt(m.ts)}</span></div>
+      <div class="text">${esc(m.text)}</div></div>`).join("") : `<div class="empty">Belum ada pesan di sini.</div>`;
+};
+$("#mt-start").onclick = e => withBusy(e.currentTarget, async () => {
+  await api("/api/meeting", {method: "POST", body: {agenda: $("#mt-agenda").value.trim()}});
+  toast("📣 Rapat dimulai. Hasilnya muncul di bawah dalam 1–3 menit.");
+  feedTopic = "diskusi";
+  await refresh();
+});
+$("#rp-daily").onclick = e => withBusy(e.currentTarget, async () => {
+  await api("/api/report", {method: "POST"});
+  toast("🗓️ Laporan harian dibuat.");
+  feedTopic = "laporan";
+  await refresh();
+});
+
+PAGES.ingatan = async () => {
+  const d = await api("/api/memory");
+  const KB = {arahan: "info", keputusan: "good", pelajaran: "warning", rencana: "", fakta: ""};
+  $("#mem-sub").textContent = `${d.notes.length} catatan · rangkuman obrolan terakhir: ${d.last_chat_summary ? timeFmt(d.last_chat_summary) : "belum pernah"}`;
+  $("#tb-mem").innerHTML = d.notes.length ? `<thead><tr><th>#</th><th>Jenis</th><th>Isi</th><th>Sumber</th><th></th></tr></thead>
+    <tbody>${d.notes.map(n => `<tr><td>${n.id}</td>
+      <td><span class="badge ${KB[n.kind] || ""}">${n.pinned ? "📌 " : ""}${esc(d.kinds[n.kind] || n.kind)}</span></td>
+      <td style="white-space:normal;min-width:260px">${esc(n.text)}${n.campaign ? `<div class="sub" style="margin:0">${esc(n.campaign)}</div>` : ""}</td>
+      <td style="white-space:normal"><span class="sub" style="margin:0">${esc(n.source)} · ${timeFmt(n.ts)}</span></td>
+      <td><button class="btn danger" data-memdel="${n.id}">Hapus</button></td></tr>`).join("")}</tbody>`
+    : `<tbody><tr><td class="empty">Belum ada ingatan. Terisi otomatis setelah rapat pertama, atau tambah arahan di atas.</td></tr></tbody>`;
+  $("#mem-impact").textContent = d.impact || "Belum ada tindakan dalam 14 hari terakhir.";
+  $("#mem-decisions").textContent = d.decisions || "Belum ada usulan yang diputuskan.";
+  $$("[data-memdel]").forEach(b => b.onclick = () => {
+    if (!confirm("Hapus catatan ini dari ingatan tim?")) return;
+    withBusy(b, async () => { await api(`/api/memory/${b.dataset.memdel}/delete`, {method: "POST"}); await PAGES.ingatan(); });
+  });
+};
+$("#mem-add").onclick = e => withBusy(e.currentTarget, async () => {
+  const text = $("#mem-text").value.trim();
+  if (!text) return toast("Tulis arahannya dulu.");
+  const res = await api("/api/memory", {method: "POST", body: {text}});
+  toast(res.duplicate ? "Arahan itu sudah tercatat." : "🧠 Arahan disimpan. Semua agent akan mengikutinya.");
+  $("#mem-text").value = "";
+  await PAGES.ingatan();
+});
+$("#mem-refresh").onclick = e => withBusy(e.currentTarget, async () => {
+  const res = await api("/api/memory/refresh", {method: "POST"});
+  toast(`🧠 Ingatan diperbarui (${res.count} catatan).`);
+  await PAGES.ingatan();
+});
+
+PAGES.tanya = async () => {
+  const sel = $("#ask-agent");
+  if (!sel.options.length) {
+    const {items} = await api("/api/agents");
+    sel.innerHTML = items.map(a => `<option value="${a.key}" ${a.key === "analyst" ? "selected" : ""}>${a.emoji} ${esc(a.name)}</option>`).join("");
+  }
+  const {items} = await api("/api/feed?topic=dashboard&limit=60");
+  const chat = $("#chat");
+  chat.innerHTML = items.length ? [...items].reverse().map(m => `
+    <div class="bubble ${m.speaker === "Owner" ? "me" : ""}"><div class="who">${esc(m.speaker === "Owner" ? "Anda" : m.speaker)} · ${timeFmt(m.ts)}</div>
+    <div class="text">${esc(m.text)}</div></div>`).join("") : `<div class="empty">Belum ada percakapan. Coba tanya: “Apa yang harus saya lakukan hari ini?”</div>`;
+  chat.scrollTop = chat.scrollHeight;
+};
+$("#ask-send").onclick = e => withBusy(e.currentTarget, async () => {
+  const text = $("#ask-text").value.trim();
+  if (!text) return toast("Tulis pertanyaan dulu.");
+  $("#chat").insertAdjacentHTML("beforeend", `<div class="bubble me"><div class="who">Anda</div><div class="text">${esc(text)}</div></div>
+    <div class="bubble" id="typing"><div class="text">⏳ Sedang menjawab…</div></div>`);
+  $("#chat").scrollTop = $("#chat").scrollHeight;
+  try {
+    await api("/api/ask", {method: "POST", body: {agent: $("#ask-agent").value, text}});
+    $("#ask-text").value = "";
+  } finally {
+    await PAGES.tanya();
+  }
+});
+$("#ask-text").addEventListener("keydown", e => {
+  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) $("#ask-send").click();
+});
+$("#cr-run").onclick = e => withBusy(e.currentTarget, async () => {
+  const brief = prompt("Brief untuk tim Creative (boleh dikosongkan):", "") ?? null;
+  if (brief === null) return;
+  const {text} = await api("/api/creative", {method: "POST", body: {brief}});
+  $("#chat").insertAdjacentHTML("beforeend", `<div class="bubble"><div class="who">🎨 Creative Team</div><div class="text">${esc(text)}</div></div>`);
+  $("#chat").scrollTop = $("#chat").scrollHeight;
+  toast("🎨 Ide kreatif juga tersimpan di menu Rapat & Laporan.");
+});
+
+// ============================================================ script tracking
+let trPoll = null;
+let trSites = [];
+
+function trResults(items) {
+  return `<ul class="results">${items.map(r => `<li><span class="${r.ok ? "up" : r.ok === false ? "down" : ""}">${r.ok ? "✓" : r.ok === false ? "✕" : "i"}</span><span>${esc(r.text)}</span></li>`).join("")}</ul>`;
+}
+
+// Cek sintaks di browser (cadangan jika Node.js tidak ada di komputer program)
+function trSyntax(code) {
+  try { new Function(code); return null; } catch (e) { return e.message; }
+}
+
+function trList(items) {
+  return `<ol style="margin:0;padding-left:20px">${items.map(x => `<li>${esc(x)}</li>`).join("")}</ol>`;
+}
+
+function trSite(s, i) {
+  const k = s.kit, t = s.test, job = s.job || {running: false, log: []};
+  const inst = s.installed === true ? ["good", "✓ Terpasang di website"] : s.installed === false ? ["critical", "✕ Belum terpasang"] : ["", "Pemasangan belum dicek"];
+  const qa = !k ? null : k.passed ? ["good", "✓ Lolos QA"] : k.passed === false ? ["warning", "! Belum lolos QA"] : ["warning", "Belum diperiksa QA"];
+  const syntax = k ? trSyntax(k.code) : null;
+  return `<div class="card">
+    <div class="toolbar" style="margin:0 0 8px">
+      <h2 style="flex:1;margin:0;word-break:break-all">🌐 ${esc(s.host)}</h2>
+      ${k ? `<span class="badge ${inst[0]}">${inst[1]}</span><span class="badge ${qa[0]}">${qa[1]}</span>` : ""}
+    </div>
+    ${job.running ? `<ul class="joblog">${(job.log.length ? job.log : [{text: "Memulai…"}]).map(l => `<li>⏳ ${esc(l.text)}</li>`).join("")}</ul>` : ""}
+    ${k ? `
+      <dl class="kv">
+        <dt>Versi</dt><dd>${esc(k.version)} · ${timeFmt(k.created)}</dd>
+        <dt>Dibuat oleh</dt><dd>${esc(k.maker)}</dd>
+        <dt>Diperiksa oleh</dt><dd>${esc(k.checker || "–")}</dd>
+        <dt>Tempel di</dt><dd>${esc(k.placement)}</dd>
+        <dt>Yang dilacak</dt><dd>${k.events.map(esc).join("<br>") || "–"}</dd>
+        <dt>Campaign</dt><dd>${(s.campaigns || []).map(c => `${esc(c.title)} #${c.id}`).join(", ") || "–"}</dd>
+        <dt>Link BeMob</dt><dd>${(s.tracking_urls || []).map(esc).join("<br>") || "–"}</dd>
+      </dl>
+      ${syntax ? `<div class="banner critical"><strong>Script ini error saat dicek browser</strong>${esc(syntax)}. Jangan ditempel; klik Buat ulang.</div>` : ""}
+      ${k.issues.length ? `<div class="banner ${k.passed ? "info" : "warning"}"><strong>Catatan QA</strong><ul style="margin:4px 0 0;padding-left:18px">${k.issues.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}
+      <textarea class="code" readonly id="tr-code-${i}">${esc(k.snippet)}</textarea>
+      <div class="toolbar" style="margin:10px 0 0">
+        <button class="btn primary" data-trcopy="${i}">📋 Salin script</button>
+        <button class="btn" data-trdownload="${i}">⬇️ Unduh file</button>
+        <button class="btn" data-trtest="${i}">🧪 Tes koneksi</button>
+        <button class="btn" data-trbuild="${i}" ${job.running ? "disabled" : ""}>🔁 Buat ulang</button>
+        <span style="flex:1"></span>
+        <button class="btn danger" data-trdelete="${i}">Hapus</button>
+      </div>
+      ${k.owner_steps.length ? `<details class="more" open><summary>Cara memasang</summary>${trList(k.owner_steps)}</details>` : ""}
+      ${k.test_steps.length ? `<details class="more"><summary>Cara mengetes manual (dari QA)</summary>${trList(k.test_steps)}</details>` : ""}
+      ${k.notes ? `<details class="more"><summary>Asumsi &amp; keterbatasan</summary><p style="margin:0">${esc(k.notes)}</p></details>` : ""}
+      <details class="more"><summary>Riwayat pembuatan</summary><ul class="setup-list">${(k.log || []).map(l =>
+        `<li><span class="sub" style="margin:0">${timeFmt(l.ts)}</span><span>${esc(l.text)}</span></li>`).join("")}</ul></details>`
+    : job.running ? "" : `<div class="toolbar"><span class="sub" style="margin:0;flex:1">Belum ada script untuk website ini.</span>
+        <button class="btn primary" data-trbuild="${i}">🛠️ Buatkan script</button>
+        <button class="btn danger" data-trdelete="${i}">Hapus</button></div>`}
+    ${trLanders(s, i)}
+    <details class="more"><summary>Contoh HTML untuk AI (dipakai saat Buat ulang)</summary>
+      <textarea id="tr-hints-${i}" placeholder="Tempel HTML tombol daftar, form deposit, riwayat transaksi…">${esc(s.hints || "")}</textarea></details>
+    ${t ? `<h2 style="margin-top:16px">Tes koneksi terakhir <span class="badge ${t.connected ? "good" : "critical"}">${t.connected ? "✓ Terhubung" : "✕ Belum terhubung"}</span></h2>
+      <p class="sub">${timeFmt(t.ts)}${t.checker ? " · dinilai " + esc(t.checker) : ""}</p>${trResults(t.results)}
+      ${t.summary ? `<div class="msg" style="margin-top:10px"><div class="who">✅ QA</div><div class="text">${esc(t.summary)}</div></div>` : ""}` : ""}
+  </div>`;
+}
+
+// Landing page di depan website: tombolnya harus ke Click URL BeMob. Script konversi tetap di website tujuan.
+function trLanders(s, i) {
+  const ls = Object.values(s.landers || {});
+  return `<h2 style="margin-top:16px">🧭 Landing page${ls.length ? "" : " <span class=\"sub\" style=\"margin:0\">(tidak ada, pengunjung langsung ke website)</span>"}</h2>
+    ${ls.map((l, j) => {
+      const c = l.check;
+      const st = !c ? ["", "Belum dicek"] : c.ok ? ["good", "✓ Tombol lewat BeMob"] : ["critical", "✕ Perlu diperbaiki"];
+      return `<div style="border:1px solid var(--border);border-radius:10px;padding:12px;margin:0 0 10px">
+        <div class="toolbar" style="margin:0 0 6px"><b style="flex:1;word-break:break-all">${esc(l.url)}</b><span class="badge ${st[0]}">${st[1]}</span></div>
+        <p class="sub" style="margin:0 0 6px">Click URL BeMob: ${esc((c && c.click_url) || l.click_url || "ditebak saat dicek")}${c ? " · dicek " + timeFmt(c.ts) : ""}</p>
+        ${c ? trResults(c.results) : ""}
+        ${l.fix ? `<p class="sub" style="margin:8px 0 4px">Perbaikan dari Developer. Paling baik: ubah alamat tombol ajakan menjadi Click URL di atas.
+          Atau tempel script ini di <b>footer landing page</b> (bukan di website tujuan):</p>
+          <textarea class="code" readonly id="tr-lfix-${i}-${j}" style="min-height:160px">${esc(l.fix)}</textarea>` : ""}
+        <div class="toolbar" style="margin:8px 0 0">
+          ${l.fix ? `<button class="btn primary" data-trlcopy="${i}-${j}">📋 Salin perbaikan</button>` : ""}
+          <button class="btn" data-trlcheck="${i}" data-url="${esc(l.url)}" data-click="${esc(l.click_url || "")}">🔎 Cek ulang tombol</button>
+          <span style="flex:1"></span>
+          <button class="btn danger" data-trlremove="${i}" data-url="${esc(l.url)}">Hapus</button>
+        </div></div>`;
+    }).join("")}
+    <details class="more"><summary>➕ Tambah landing page di depan website ini</summary>
+      <div class="toolbar">
+        <input type="text" id="tr-lurl-${i}" placeholder="https://landing-anda.com/" style="flex:1 1 240px">
+        <input type="text" id="tr-lclick-${i}" placeholder="Click URL BeMob (opsional)" style="flex:1 1 240px">
+        <button class="btn" data-trladd="${i}">🔎 Tambah &amp; cek</button>
+      </div></details>`;
+}
+
+async function trCopyBox(id, msg) {
+  const box = document.getElementById(id);
+  try {
+    await navigator.clipboard.writeText(box.value);
+  } catch (e) { // http biasa (mis. VPS tanpa https): clipboard API tidak tersedia
+    box.select();
+    document.execCommand("copy");
+  }
+  toast(msg);
+}
+
+function trCopy(i) {
+  return trCopyBox(`tr-code-${i}`, "📋 Script disalin. Tempel di footer website, simpan, lalu klik Tes koneksi.");
+}
+
+function trDownload(i) {
+  const s = trSites[i];
+  const url = URL.createObjectURL(new Blob([s.kit.snippet], {type: "text/html"}));
+  const a = Object.assign(document.createElement("a"), {href: url, download: `tracking-${s.host}.html`});
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// Landing page buatan tim AI (Owner meng-upload sendiri)
+let lpAi = [];
+const LPAI_ST = {building: ["", "⏳ Sedang dibuat"], ready: ["warning", "📦 Siap, menunggu di-upload"],
+  online: ["good", "🟢 Online"], failed: ["critical", "✕ Gagal"]};
+
+function lpAiItem(r, i) {
+  const st = r.building ? LPAI_ST.building : (LPAI_ST[r.status] || ["", esc(r.status)]);
+  const c = r.copy || {};
+  const qa = r.passed ? ["good", "✓ Lolos QA"] : r.passed === false ? ["warning", "! Belum lolos QA"] : ["", "Belum diperiksa QA"];
+  return `<div style="border:1px solid var(--border);border-radius:10px;padding:12px;margin:12px 0 0">
+    <div class="toolbar" style="margin:0 0 6px"><b style="flex:1;word-break:break-all">#${esc(r.id)} · ${esc(r.host)}</b>
+      <span class="badge ${st[0]}">${st[1]}</span>${r.html ? `<span class="badge ${qa[0]}">${qa[1]}</span>` : ""}</div>
+    <p class="sub" style="margin:0 0 6px">${esc(r.source)} · ${timeFmt(r.created)}${r.brief ? " · " + esc(r.brief) : ""}</p>
+    ${r.building ? `<ul class="joblog">${(r.log.length ? r.log : [{text: "Memulai…"}]).map(l => `<li>⏳ ${esc(l.text)}</li>`).join("")}</ul>` : ""}
+    ${r.html && !r.building ? `
+      <dl class="kv">
+        <dt>Ide</dt><dd>${esc(c.angle || "–")}</dd>
+        <dt>Judul</dt><dd>${esc(c.headline || "–")}</dd>
+        <dt>Tombol</dt><dd>${esc(c.cta || "–")} → ${esc(r.click_url)}</dd>
+        <dt>Dibuat</dt><dd>Isi: ${esc(r.writer)} · HTML: ${esc(r.maker)}${r.checker ? " · Dicek: " + esc(r.checker) : ""} · versi ${esc(r.version)}</dd>
+        ${r.live_url ? `<dt>Online di</dt><dd><a href="${esc(r.live_url)}" target="_blank" rel="noopener">${esc(r.live_url)}</a></dd>` : ""}
+      </dl>
+      ${r.issues.length ? `<div class="banner ${r.passed ? "info" : "warning"}"><strong>Catatan QA</strong><ul style="margin:4px 0 0;padding-left:18px">${r.issues.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}
+      <details class="more"><summary>👁️ Pratinjau (tampilan HP)</summary>
+        <iframe sandbox="" srcdoc="${esc(r.html)}" style="width:100%;max-width:390px;height:640px;border:1px solid var(--border);border-radius:12px;background:#fff"></iframe></details>
+      <div class="toolbar" style="margin:10px 0 0">
+        <button class="btn primary" data-lpdl="${i}">⬇️ Unduh file HTML</button>
+        <input type="text" id="lpai-url-${i}" placeholder="Alamat setelah di-upload, mis. https://promo.domain-anda.com/" value="${esc(r.live_url || "")}" style="flex:1 1 240px">
+        <button class="btn good" data-lponline="${i}">✅ Sudah online, cek</button>
+      </div>` : !r.building && r.summary ? `<p class="sub">${esc(r.summary)}</p>` : ""}
+    ${!r.building ? `<div class="toolbar" style="margin:8px 0 0">
+      <input type="text" id="lpai-fb-${i}" placeholder="Minta revisi, mis. judul lebih singkat, warna biru…" style="flex:1 1 240px">
+      <button class="btn" data-lprevise="${i}">🔁 ${r.html ? "Revisi" : "Coba lagi"}</button>
+      <span style="flex:1"></span>
+      <button class="btn danger" data-lpdelete="${i}">Hapus</button></div>` : ""}
+  </div>`;
+}
+
+function lpAiBind() {
+  $$("[data-lpdl]").forEach(b => b.onclick = () => {
+    const r = lpAi[b.dataset.lpdl];
+    const url = URL.createObjectURL(new Blob([r.html], {type: "text/html"}));
+    Object.assign(document.createElement("a"), {href: url, download: `landing-${r.host}-${r.id}.html`}).click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
+  $$("[data-lponline]").forEach(b => b.onclick = () => {
+    const i = b.dataset.lponline, url = $(`#lpai-url-${i}`).value.trim();
+    if (!url) return toast("Tulis alamat landing page setelah di-upload.");
+    withBusy(b, async () => {
+      const res = await api(`/api/landers/${lpAi[i].id}/online`, {method: "POST", body: {url}});
+      toast(res.ok ? "✅ Landing page online dan tombolnya lewat BeMob." : "⚠️ Sudah dicatat, tapi ada masalah. Lihat bagian Landing page di kartu website.");
+      await PAGES.tracking();
+    });
+  });
+  $$("[data-lprevise]").forEach(b => b.onclick = () => {
+    const i = b.dataset.lprevise;
+    withBusy(b, async () => {
+      await api(`/api/landers/${lpAi[i].id}/revise`, {method: "POST", body: {feedback: $(`#lpai-fb-${i}`).value.trim()}});
+      toast("🎨 Tim mulai merevisi. Progresnya tampil di sini.");
+      await PAGES.tracking();
+    });
+  });
+  $$("[data-lpdelete]").forEach(b => b.onclick = () => {
+    const r = lpAi[b.dataset.lpdelete];
+    if (!confirm(`Hapus landing page #${r.id} dari daftar? Halaman yang sudah Anda upload tidak ikut terhapus.`)) return;
+    withBusy(b, async () => {
+      await api(`/api/landers/${r.id}/delete`, {method: "POST"});
+      await PAGES.tracking();
+    });
+  });
+}
+
+$("#lpai-build").onclick = e => withBusy(e.currentTarget, async () => {
+  const site = $("#lpai-site").value.trim();
+  if (!site) return toast("Pilih atau tulis website tujuan dulu.");
+  const res = await api("/api/landers", {method: "POST", body: {site, brief: $("#lpai-brief").value.trim()}});
+  toast(`🎨 Landing page #${res.id} mulai dibuat.`);
+  $("#lpai-site").value = ""; $("#lpai-brief").value = "";
+  await PAGES.tracking();
+});
+
+PAGES.tracking = async () => {
+  const [d, lp] = await Promise.all([api("/api/tracking"), api("/api/landers")]);
+  trSites = d.sites;
+  lpAi = lp.landers;
+  $("#lpai-sites").innerHTML = lp.sites.map(h => `<option value="${esc(h)}">`).join("");
+  $("#lpai-team").innerHTML = `Isi ditulis <b>${esc(lp.writer)}</b>, HTML dibuat <b>${esc(lp.maker)}</b> (semua tombol ke Click URL BeMob), diperiksa <b>${esc(lp.checker)}</b>.
+    Anda menerima satu file HTML untuk di-upload ke hosting Anda, lalu klik <b>Sudah online</b>. Memakai kredit AI.`;
+  $("#lpai-list").innerHTML = lpAi.map(lpAiItem).join("");
+  lpAiBind();
+  $("#tr-lps").innerHTML = d.landing_pages.map(u => `<option value="${esc(u)}">`).join("");
+  const banners = [];
+  if (!d.postback) banners.push(`<div class="banner warning"><strong>URL postback BeMob belum diisi</strong>Sistem mencoba menebaknya dari link campaign BeMob. Sebaiknya isi di <a href="#pengaturan">Pengaturan</a> → Script tracking website.</div>`);
+  if (!d.maker_chain.length) banners.push(`<div class="banner critical"><strong>Belum ada AI yang siap</strong>Isi minimal satu API key di <a href="#pengaturan">Pengaturan</a>. Tanpa AI, dipakai template standar.</div>`);
+  $("#tr-banners").innerHTML = banners.join("");
+  $("#tr-team").innerHTML = [
+    ["🛠️", `Pembuat script: ${d.maker}`, d.maker_chain.length ? `Jika gagal atau ditolak QA, dicoba berurutan: ${d.maker_chain.join(" → ")} → template standar.` : "Belum ada AI siap: dipakai template standar."],
+    ["✅", `Pemeriksa kode & penguji koneksi: ${d.checker}`, d.checker_chain.length ? `Jika gagal, dicoba berurutan: ${d.checker_chain.join(" → ")}.` : "Belum ada AI siap: hanya cek otomatis tanpa AI."],
+  ].map(([ic, t, h]) => `<li><span>${ic}</span><div><b>${esc(t)}</b><div class="hint">${esc(h)}</div></div></li>`).join("");
+
+  $("#tr-sites").innerHTML = d.sites.length ? d.sites.map(trSite).join("")
+    : `<div class="card"><div class="empty">Belum ada website. Script dibuat otomatis saat campaign baru dibuat, atau buat di atas.</div></div>`;
+  $$("[data-trcopy]").forEach(b => b.onclick = () => trCopy(b.dataset.trcopy));
+  $$("[data-trdownload]").forEach(b => b.onclick = () => trDownload(b.dataset.trdownload));
+  $$("[data-trtest]").forEach(b => b.onclick = () => withBusy(b, async () => {
+    const res = await api("/api/tracking/test", {method: "POST", body: {host: trSites[b.dataset.trtest].host}});
+    toast(res.connected ? "✅ Semua cek otomatis lolos." : "⚠️ Belum terhubung. Lihat hasil tes.");
+    await PAGES.tracking();
+  }));
+  $$("[data-trbuild]").forEach(b => b.onclick = () => {
+    const s = trSites[b.dataset.trbuild];
+    if (s.kit && !confirm(`Buat ulang script untuk ${s.host}? Versi baru harus ditempel ulang di website.`)) return;
+    withBusy(b, async () => {
+      await api("/api/tracking/build", {method: "POST", body: {url: s.url, hints: $(`#tr-hints-${b.dataset.trbuild}`).value}});
+      toast("🛠️ Developer mulai membuat script. Progresnya tampil di sini.");
+      await PAGES.tracking();
+    });
+  });
+  $$("[data-trlcopy]").forEach(b => b.onclick = () => trCopyBox(`tr-lfix-${b.dataset.trlcopy}`,
+    "📋 Perbaikan disalin. Tempel di footer LANDING PAGE, simpan, lalu klik Cek ulang tombol."));
+  const trLander = (b, i, body, msg) => withBusy(b, async () => {
+    const res = await api("/api/tracking/lander", {method: "POST", body: {host: trSites[i].host, ...body}});
+    toast(msg(res));
+    await PAGES.tracking();
+  });
+  $$("[data-trlcheck]").forEach(b => b.onclick = () => trLander(b, b.dataset.trlcheck, {url: b.dataset.url, click_url: b.dataset.click},
+    r => r.ok ? "✅ Semua tombol landing page lewat BeMob." : "⚠️ Tombol landing page perlu diperbaiki. Lihat hasilnya."));
+  $$("[data-trladd]").forEach(b => b.onclick = () => {
+    const i = b.dataset.trladd, url = $(`#tr-lurl-${i}`).value.trim();
+    if (!url) return toast("Tulis alamat landing page dulu.");
+    trLander(b, i, {url, click_url: $(`#tr-lclick-${i}`).value.trim()},
+      r => r.ok ? "✅ Landing page ditambahkan, tombolnya sudah benar." : "⚠️ Landing page ditambahkan, tombolnya perlu diperbaiki.");
+  });
+  $$("[data-trlremove]").forEach(b => b.onclick = () => {
+    if (!confirm(`Hapus landing page ${b.dataset.url} dari daftar?`)) return;
+    trLander(b, b.dataset.trlremove, {url: b.dataset.url, remove: true}, () => "Landing page dihapus dari daftar.");
+  });
+  $$("[data-trdelete]").forEach(b => b.onclick = () => {
+    const s = trSites[b.dataset.trdelete];
+    if (!confirm(`Hapus ${s.host} dari daftar? Script yang sudah terpasang di website tidak ikut terhapus.`)) return;
+    withBusy(b, async () => {
+      await api("/api/tracking/delete", {method: "POST", body: {host: s.host}});
+      await PAGES.tracking();
+    });
+  });
+
+  clearTimeout(trPoll);
+  if (d.sites.some(s => s.job?.running) || lpAi.some(r => r.building)) {
+    const poll = () => {
+      if (current !== "tracking") return;
+      if (["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName)) trPoll = setTimeout(poll, 4000);
+      else PAGES.tracking().catch(() => {});
+    };
+    trPoll = setTimeout(poll, 4000);
+  }
+};
+$("#tr-build").onclick = e => withBusy(e.currentTarget, async () => {
+  const url = $("#tr-url").value.trim();
+  if (!url) return toast("Tulis alamat website dulu.");
+  const res = await api("/api/tracking/build", {method: "POST", body: {url, hints: $("#tr-hints").value}});
+  toast(`🛠️ Developer mulai membuat script untuk ${res.host}.`);
+  $("#tr-url").value = ""; $("#tr-hints").value = "";
+  await PAGES.tracking();
+});
+
+PAGES.lp = async () => {
+  const data = await api("/api/checks");
+  $("#tb-health").innerHTML = data.health.length ? `<thead><tr><th>Alamat</th><th>Jenis</th><th>Status</th><th class="num">Waktu muat</th><th>Dicek</th></tr></thead>
+    <tbody>${data.health.map(h => {
+      const st = !h.ok ? ["critical", "✕ MATI", h.error || "HTTP " + h.status] : h.ms > 5000 ? ["warning", "! Lambat", ""] : ["good", "✓ Aktif", ""];
+      return `<tr><td style="white-space:normal;word-break:break-all">${esc(h.url)}</td><td>${esc(h.kind)}</td>
+        <td><span class="badge ${st[0]}">${st[1]}</span> <span class="sub">${esc(st[2])}</span></td>
+        <td class="num">${h.ms == null ? "–" : num(h.ms) + " ms"}</td><td>${timeFmt(h.ts)}</td></tr>`;
+    }).join("")}</tbody>`
+    : `<tbody><tr><td class="empty">${data.configured ? "Belum pernah dicek. Klik “Cek sekarang”." : "Belum ada alamat yang dipantau. Isi LANDING_PAGE_URLS di .env."}</td></tr></tbody>`;
+  const qa = data.qa;
+  $("#qa-when").textContent = qa ? `Dicek sebagai HP Android · ${timeFmt(qa.ts)}` : "Belum ada hasil QA.";
+  $("#qa").innerHTML = qa ? qa.results.map(r => `
+    <div class="proposal"><div class="head" style="word-break:break-all"><b>${esc(r.url)}</b></div>
+    <ul class="setup-list">${r.checks.map(c => `<li><span class="${c.ok ? "up" : "down"}">${c.ok ? "✓" : "!"}</span><span>${esc(c.text)}</span></li>`).join("")}</ul></div>`).join("") : "";
+};
+$("#lp-run").onclick = e => withBusy(e.currentTarget, async () => {
+  await api("/api/checks/run", {method: "POST"});
+  toast("🔍 Pengecekan selesai.");
+  await refresh();
+});
+
+PAGES.biaya = async () => {
+  const data = await api("/api/costs");
+  $("#cost-kpi").innerHTML = [
+    ["Hari ini", money(ov.ai_cost.today)], ["Bulan ini", money(ov.ai_cost.month)], ["Model AI", esc(data.model)],
+  ].map(([l, v]) => `<div class="tile"><div class="label">${l}</div><div class="value" style="font-size:${l === "Model AI" ? "18px" : ""}">${v}</div></div>`).join("");
+  const labels = data.by_day.map(d => new Date(d.label + "T00:00:00").toLocaleDateString("id-ID", {day: "2-digit", month: "short"}));
+  unhide("ch-cost-day");
+  const o1 = chartBase();
+  o1.scales.y.ticks.callback = v => "$" + v.toFixed(2); o1.plugins.legend.display = false;
+  drawChart("ch-cost-day", {type: "bar", data: {labels, datasets: [{label: "Biaya AI", data: data.by_day.map(d => d.cost),
+    backgroundColor: cssVar("--series-1"), borderRadius: 4, maxBarThickness: 22}]}, options: o1});
+  if (!data.by_agent.length) return showEmpty("ch-cost-agent", "Belum ada pemakaian AI bulan ini.");
+  unhide("ch-cost-agent");
+  const o2 = chartBase(); o2.plugins.legend.display = false; o2.indexAxis = "y";
+  o2.interaction = {mode: "nearest", axis: "y", intersect: false};
+  o2.scales = {x: {...o2.scales.y}, y: {grid: {display: false}, ticks: {color: cssVar("--muted")}}};
+  $("#ch-cost-agent").parentElement.style.height = Math.max(160, data.by_agent.length * 40 + 60) + "px";
+  drawChart("ch-cost-agent", {type: "bar", data: {labels: data.by_agent.map(a => a.name), datasets: [{label: "Biaya AI",
+    data: data.by_agent.map(a => a.cost), backgroundColor: cssVar("--series-1"), borderRadius: 4, maxBarThickness: 24}]}, options: o2});
+};
+
+PAGES.bantuan = async () => {
+  $("#setup-list").innerHTML = ov.setup.map(s => `<li><span class="${s.ok ? "up" : "down"}">${s.ok ? "✓" : "✕"}</span>
+    <div><b>${esc(s.label)}</b>${s.ok ? "" : `<div class="hint">${esc(s.hint)}</div>`}</div></li>`).join("");
+  const l = ov.limits;
+  $("#tb-limits").innerHTML = `<tbody>${[
+    ["Batas spend harian", money(l.max_daily_spend), "MAX_DAILY_SPEND_USD"],
+    ["Perubahan bid maksimal", l.max_bid_change_pct + "%", "MAX_BID_CHANGE_PCT"],
+    ["Budget harian maks per campaign", money(l.max_campaign_budget), "MAX_CAMPAIGN_DAILY_BUDGET_USD"],
+    ["Zone dianggap boros jika spend ≥", money(l.zone_waste), "ZONE_WASTE_USD"],
+    ["Zone dianggap rugi jika ROI <", l.zone_min_roi + "%", "ZONE_MIN_ROI_PCT"],
+    ["Zone dianggap bagus jika ROI ≥", l.zone_good_roi + "%", "ZONE_GOOD_ROI_PCT"],
+  ].map(([a, b, c]) => `<tr><td style="white-space:normal">${a}<div class="sub" style="margin:0">${c}</div></td><td class="num"><b>${b}</b></td></tr>`).join("")}</tbody>`;
+};
+$("#csv-upload").onclick = e => withBusy(e.currentTarget, async () => {
+  const file = $("#csv-file").files[0];
+  if (!file) return toast("Pilih file CSV dulu.");
+  const fd = new FormData();
+  fd.append("file", file);
+  const res = await api("/api/upload", {method: "POST", body: fd});
+  toast(`✅ ${res.file} diunggah.` + (ov.data_source !== "csv" ? " Ingat: pilih sumber data CSV di menu Pengaturan." : ""));
+  $("#csv-file").value = "";
+});
+
+// ============================================================ pengaturan
+let setData = null;      // skema + nilai dari server
+let setDirty = false;
+const cleared = new Set(); // rahasia yang diminta untuk dihapus
+
+function fieldInput(f) {
+  const id = `f-${f.key}`;
+  const v = esc(f.value);
+  if (f.type === "secret") {
+    const ph = f.is_set ? `Tersimpan (${f.hint}). Kosongkan jika tidak diubah` : "Belum diisi";
+    return `<div class="inline"><input type="password" id="${id}" data-key="${f.key}" placeholder="${esc(ph)}" autocomplete="off">
+      <button class="btn" type="button" data-reveal="${id}" title="Tampilkan / sembunyikan">👁</button></div>
+      ${f.is_set ? `<button class="linkbtn" type="button" data-clear="${f.key}">Hapus nilai tersimpan</button>` : ""}`;
+  }
+  if (f.type === "select") {
+    const known = f.options.some(o => o.value === f.value);
+    const opts = (known || !f.value ? [] : [{value: f.value, label: f.value + " (nilai lama)"}]).concat(f.options);
+    return `<select id="${id}" data-key="${f.key}">${opts.map(o =>
+      `<option value="${esc(o.value)}" ${o.value === f.value ? "selected" : ""}>${esc(o.label)}</option>`).join("")}</select>`;
+  }
+  if (f.type === "list" || f.type === "reminders") return `<textarea id="${id}" data-key="${f.key}">${v}</textarea>`;
+  if (f.type === "time") return `<input type="time" id="${id}" data-key="${f.key}" value="${v}">`;
+  if (f.type === "number") return `<input type="number" step="any" id="${id}" data-key="${f.key}" value="${v}">`;
+  const detect = f.detect ? `<button class="btn" type="button" data-detect="${f.detect}" data-target="${id}">🔎 Deteksi</button>` : "";
+  return `<div class="inline"><input type="text" id="${id}" data-key="${f.key}" value="${v}">${detect}</div><div class="found" id="found-${id}"></div>`;
+}
+
+function formValues() {
+  const values = {};
+  $$("#set-groups [data-key]").forEach(el => {
+    const f = setData.fields[el.dataset.key];
+    if (f.type === "secret") {
+      if (cleared.has(f.key)) values[f.key] = null;
+      else if (el.value.trim()) values[f.key] = el.value.trim();
+    } else {
+      values[f.key] = el.value;
+    }
+  });
+  return values;
+}
+
+function applyShowIf() {
+  const source = $("#f-DATA_SOURCE")?.value;
+  $$("#set-groups [data-show-if]").forEach(row => { row.hidden = !row.dataset.showIf.split(",").includes(source); });
+}
+
+function markDirty() {
+  setDirty = true;
+  $("#set-savebar").hidden = false;
+}
+
+function renderRestart(pending, supported) {
+  $("#set-restart").innerHTML = pending.length ? `
+    <div class="banner warning"><strong>Pengaturan tersimpan, tetapi belum dipakai</strong>
+      Program perlu dijalankan ulang agar perubahan (${pending.map(esc).join(", ")}) berlaku.
+      <div class="toolbar" style="margin:10px 0 0">${supported
+        ? `<button class="btn primary" id="set-restart-btn">🔄 Jalankan ulang sekarang</button>`
+        : `<span>Tutup jendela hitam program, lalu klik dua kali <b>jalankan.bat</b> lagi.</span>`}</div></div>` : "";
+  const btn = $("#set-restart-btn");
+  if (btn) btn.onclick = () => withBusy(btn, restartProgram);
+}
+
+async function restartProgram() {
+  const newPort = setData.pending.includes("DASHBOARD_PORT") ? $("#f-DASHBOARD_PORT").value : location.port;
+  await api("/api/restart", {method: "POST"});
+  toast("🔄 Menjalankan ulang program…");
+  const target = `${location.protocol}//${location.hostname}:${newPort}/`;
+  await new Promise(r => setTimeout(r, 2500));
+  for (let i = 0; i < 40; i++) {
+    try {
+      // no-cors: berhasil selama server hidup, termasuk jika port-nya berubah
+      await fetch(target + "api/agents", {cache: "no-store", mode: "no-cors"});
+      setDirty = false;
+      if (String(newPort) === location.port) location.reload();
+      else location.href = target + "#pengaturan";
+      return;
+    } catch (e) { /* belum hidup */ }
+    await new Promise(r => setTimeout(r, 1500));
+  }
+  toast("⚠️ Program belum menyala lagi. Cek jendela hitam program.");
+}
+
+$("#logout-me").onclick = () => { if (confirm("Keluar dari dashboard?")) logout(); };
+$("#logout-others").onclick = e => withBusy(e.currentTarget, async () => {
+  const {ended} = await api("/api/auth/logout-others", {method: "POST"});
+  toast(ended ? `🔐 ${ended} perangkat lain dikeluarkan.` : "Tidak ada perangkat lain yang login.");
+  await loadSessions();
+});
+
+PAGES.pengaturan = async () => {
+  loadSessions().catch(() => {});
+  if (setDirty) return; // jangan timpa isian yang belum disimpan
+  const data = await api("/api/settings");
+  setData = {fields: {}, pending: data.pending_restart, supported: data.restart_supported};
+  data.groups.forEach(g => g.fields.forEach(f => { setData.fields[f.key] = f; }));
+  cleared.clear();
+  renderRestart(data.pending_restart, data.restart_supported);
+  $("#set-groups").innerHTML = data.groups.map(g => `
+    <div class="card" data-group="${g.id}">
+      <div class="toolbar" style="margin:0">
+        <h2 style="flex:1">${esc(g.title)}</h2>
+        ${g.test ? `<button class="btn" type="button" data-test="${g.test}">🧪 Tes ${g.test === "claude" ? "API Claude" : g.test === "ai" ? "semua AI" : g.test === "telegram" ? "Telegram" : "sumber data"}</button>` : ""}
+      </div>
+      <p class="sub">${esc(g.intro)}</p>
+      ${g.fields.map(f => `<div class="field" ${f.show_if ? `data-show-if="${f.show_if}"` : ""}>
+        <label for="f-${f.key}">${esc(f.label)}</label>
+        <div>${fieldInput(f)}${f.help ? `<div class="fhelp">${esc(f.help)}</div>` : ""}</div></div>`).join("")}
+      <div id="test-${g.test || g.id}"></div>
+    </div>`).join("");
+  $("#set-savebar").hidden = true;
+  applyShowIf();
+
+  $$("#set-groups [data-key]").forEach(el => el.addEventListener("input", markDirty));
+  $("#f-DATA_SOURCE")?.addEventListener("change", applyShowIf);
+  $$("[data-reveal]").forEach(b => b.onclick = () => {
+    const input = document.getElementById(b.dataset.reveal);
+    input.type = input.type === "password" ? "text" : "password";
+  });
+  $$("[data-clear]").forEach(b => b.onclick = () => {
+    if (!confirm("Hapus nilai tersimpan ini? Berlaku setelah disimpan.")) return;
+    cleared.add(b.dataset.clear);
+    b.textContent = "Akan dihapus saat disimpan";
+    b.disabled = true;
+    markDirty();
+  });
+  $$("[data-test]").forEach(b => b.onclick = () => withBusy(b, async () => {
+    const box = $(`#test-${b.dataset.test}`);
+    box.innerHTML = "";
+    const {results} = await api("/api/settings/test", {method: "POST", body: {what: b.dataset.test, values: formValues()}});
+    box.innerHTML = `<ul class="results">${results.map(r =>
+      `<li><span class="${r.ok ? "up" : "down"}">${r.ok ? "✓" : "✕"}</span><span>${esc(r.text)}</span></li>`).join("")}</ul>`;
+  }));
+  $$("[data-detect]").forEach(b => b.onclick = () => withBusy(b, async () => {
+    const res = await api("/api/settings/detect", {method: "POST", body: {values: formValues()}});
+    const items = b.dataset.detect === "group" ? res.groups : res.users;
+    const box = document.getElementById("found-" + b.dataset.target);
+    if (!items.length) {
+      box.innerHTML = `<span class="fhelp">Belum ditemukan. Pastikan bot sudah masuk grup, ketik <b>/id</b> di grup, lalu klik Deteksi lagi.</span>`;
+      return;
+    }
+    box.innerHTML = `<span class="fhelp" style="width:100%">Klik untuk memilih:</span>` + items.map(it =>
+      `<button class="chip" type="button" data-pick="${esc(it.id)}">${esc(it.name || "(tanpa nama)")} · ${esc(it.id)}</button>`).join("");
+    $$("[data-pick]", box).forEach(c => c.onclick = () => {
+      const input = document.getElementById(b.dataset.target);
+      if (b.dataset.detect === "user" && input.value.trim()) {
+        const ids = input.value.split(",").map(x => x.trim()).filter(Boolean);
+        if (!ids.includes(c.dataset.pick)) ids.push(c.dataset.pick);
+        input.value = ids.join(",");
+      } else {
+        input.value = c.dataset.pick;
+      }
+      markDirty();
+    });
+  }));
+};
+$("#set-save").onclick = e => withBusy(e.currentTarget, async () => {
+  const res = await api("/api/settings", {method: "POST", body: {values: formValues()}});
+  setDirty = false;
+  toast(res.changed.length ? `💾 ${res.changed.length} pengaturan disimpan.` : "Tidak ada yang berubah.");
+  await PAGES.pengaturan();
+});
+$("#set-reset").onclick = () => { setDirty = false; PAGES.pengaturan(); };
+window.addEventListener("beforeunload", e => { if (setDirty) { e.preventDefault(); e.returnValue = ""; } });
+
+// ============================================================ start
+go();
+setInterval(() => {
+  // jangan ganggu saat Owner sedang mengetik
+  if (["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName)) return;
+  if (current === "tanya" || current === "pengaturan") return;
+  refresh();
+}, 60000);
+setInterval(() => { if (ov?.meeting_running && current === "rapat") refresh(); }, 6000);
+</script>
+</body>
+</html>

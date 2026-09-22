@@ -1,0 +1,6 @@
+anthropic
+python-telegram-bot[job-queue]>=21.0
+httpx
+python-dotenv
+tzdata
+aiohttp

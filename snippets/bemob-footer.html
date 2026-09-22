@@ -1,0 +1,140 @@
+<!-- ===== BeMob conversion tracking (tempel di FOOTER semua halaman) ===== -->
+<script>
+(function () {
+  // ---------- PENGATURAN ----------
+  var POSTBACK = 'https://7hr5q.bemobtrcks.com/postback';
+  var PAYOUT_DAFTAR = 0;        // nilai USD per pendaftaran (0 = dicatat tanpa nilai)
+  var IDR_PER_UNIT = 1000;      // di situs: "IDR 1 = 1,000"
+  var KURS_USD = 16000;         // 1 USD = Rp16.000
+  var BAGIAN_DEPOSIT = 1;       // 1 = seluruh deposit dihitung pendapatan; 0.3 = 30%
+  var HARI_SIMPAN = 30;         // click_id disimpan berapa hari
+  var DEBUG = false;            // true = tampilkan log di Console browser
+
+  // ---------- Penyimpanan click_id ----------
+  var KEY = 'bm_cid', KEY_TS = 'bm_cid_ts', KEY_SENT = 'bm_sent';
+
+  function log() { if (DEBUG && window.console) console.log.apply(console, ['[BeMob]'].concat([].slice.call(arguments))); }
+
+  function rootDomain() {
+    var h = location.hostname.split('.');
+    return h.length > 2 ? '.' + h.slice(-2).join('.') : location.hostname;
+  }
+  function setCookie(k, v) {
+    document.cookie = k + '=' + encodeURIComponent(v) + ';path=/;max-age=' + (HARI_SIMPAN * 86400) +
+      ';domain=' + rootDomain() + ';SameSite=Lax';
+  }
+  function getCookie(k) {
+    var m = document.cookie.match(new RegExp('(?:^|; )' + k + '=([^;]*)'));
+    return m ? decodeURIComponent(m[1]) : null;
+  }
+  function save(k, v) { try { localStorage.setItem(k, v); } catch (e) {} setCookie(k, v); }
+  function load(k) { var v = null; try { v = localStorage.getItem(k); } catch (e) {} return v || getCookie(k); }
+
+  // Tangkap click_id dari URL (BeMob mengirim ?click_id=...)
+  var qs = new URLSearchParams(location.search);
+  var fromUrl = qs.get('click_id') || qs.get('clickid') || qs.get('cid') || qs.get('subid');
+  if (fromUrl && /^[A-Za-z0-9_-]{6,}$/.test(fromUrl)) {
+    if (fromUrl !== load(KEY)) { save(KEY, fromUrl); save(KEY_TS, String(Date.now())); }
+    log('click_id disimpan', fromUrl);
+  }
+  var cid = load(KEY);
+  if (!cid) { log('tidak ada click_id, tracking tidak aktif'); return; }
+  var cidTs = parseInt(load(KEY_TS) || '0', 10);
+
+  // ---------- Kirim postback (anti-dobel) ----------
+  function sentList() { try { return JSON.parse(load(KEY_SENT) || '[]'); } catch (e) { return []; } }
+  function send(txid, payout) {
+    var list = sentList();
+    if (list.indexOf(txid) !== -1) return;
+    var url = POSTBACK + '?cid=' + encodeURIComponent(cid) +
+      '&payout=' + encodeURIComponent(payout.toFixed(2)) +
+      '&txid=' + encodeURIComponent(txid);
+    new Image().src = url;
+    list.push(txid);
+    save(KEY_SENT, JSON.stringify(list.slice(-50)));
+    log('postback terkirim', url);
+  }
+
+  // ---------- 1. PENDAFTARAN ----------
+  function onRegister(form) {
+    if (form && form.checkValidity && !form.checkValidity()) return; // form belum lengkap
+    send('REG-' + cid, PAYOUT_DAFTAR);
+  }
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest && e.target.closest('#RegisterButton, #v4rbtn');
+    if (btn) onRegister(btn.form || document.getElementById('v4regform'));
+  }, true);
+  document.addEventListener('submit', function (e) {
+    var f = e.target;
+    if (f.id === 'v4regform' || f.querySelector('#RegisterButton, #v4rbtn')) onRegister(f);
+  }, true);
+
+  // ---------- 2. DEPOSIT (hanya yang statusnya sukses) ----------
+  var BULAN = { jan:0, feb:1, mar:2, apr:3, may:4, mei:4, jun:5, jul:6, aug:7, agu:7, agt:7, sep:8, oct:9, okt:9, nov:10, dec:11, des:11 };
+  function parseTgl(s) { // "22 Sep 2026 15:46:33"
+    var m = (s || '').match(/(\d{1,2})\s+([A-Za-z]{3})\w*\s+(\d{4})\s+(\d{1,2}):(\d{2}):?(\d{2})?/);
+    if (!m) return null;
+    var mo = BULAN[m[2].toLowerCase()];
+    return mo === undefined ? null : new Date(+m[3], mo, +m[1], +m[4], +m[5], +(m[6] || 0)).getTime();
+  }
+  function isSukses(el) {
+    if (!el) return false;
+    var t = el.textContent.trim().toLowerCase();
+    if (/reject|tolak|gagal|fail|pending|proses|menunggu|cancel|batal/.test(t)) return false;
+    return /approv|success|sukses|berhasil|complete|selesai|diterima|done/.test(t) || el.classList.contains('alert-success');
+  }
+  function scan(root) {
+    var cards = (root || document).querySelectorAll('.history-card');
+    for (var i = 0; i < cards.length; i++) {
+      var c = cards[i];
+      var title = c.querySelector('.history-title');
+      if (!title || !/deposit/i.test(title.textContent)) continue;
+      if (!isSukses(c.querySelector('.history-status'))) continue;
+      var ref = c.querySelector('.trx-refno');
+      var refno = ref ? ref.textContent.trim() : '';
+      if (!refno) continue;
+      // abaikan deposit yang terjadi sebelum orang ini datang dari iklan
+      var rows = c.querySelectorAll('.history-summary-row'), ts = null;
+      for (var j = 0; j < rows.length && ts === null; j++) ts = parseTgl(rows[j].textContent);
+      if (ts !== null && cidTs && ts < cidTs - 10 * 60 * 1000) continue;
+      var amtEl = c.querySelector('.amount');
+      var amt = amtEl ? parseFloat(amtEl.textContent.replace(/[^\d.]/g, '')) || 0 : 0;
+      var usd = amt * IDR_PER_UNIT / KURS_USD * BAGIAN_DEPOSIT;
+      send(refno, usd);
+    }
+  }
+
+  // a) saat halaman riwayat terbuka / diperbarui
+  function start() {
+    scan(document);
+    new MutationObserver(function () { scan(document); })
+      .observe(document.body, { childList: true, subtree: true });
+    cekLatar();
+  }
+
+  // b) cek riwayat di latar belakang (maks. 1x per 3 menit), supaya deposit
+  //    tetap tercatat walau pemain tidak membuka halaman riwayat
+  function dd(d) { return ('0' + d.getDate()).slice(-2) + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + d.getFullYear(); }
+  function cekLatar() {
+    var last = parseInt(load('bm_chk') || '0', 10);
+    if (Date.now() - last < 3 * 60 * 1000) return;
+    save('bm_chk', String(Date.now()));
+    var dari = new Date(Math.max(cidTs || Date.now(), Date.now() - 7 * 86400000));
+    var body = 'type=allmobile&startDate=' + dd(dari) + '&endDate=' + dd(new Date());
+    fetch('/api/bank/transactionHistory', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'X-Requested-With': 'XMLHttpRequest' },
+      body: body
+    }).then(function (r) { return r.ok ? r.text() : ''; }).then(function (txt) {
+      if (!txt) return;
+      var html = txt;
+      try { var j = JSON.parse(txt); html = typeof j === 'string' ? j : JSON.stringify(j); } catch (e) {}
+      scan(new DOMParser().parseFromString(html, 'text/html'));
+    }).catch(function () {});
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+  else start();
+})();
+</script>
+<!-- ===== /BeMob conversion tracking ===== -->

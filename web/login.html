@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Masuk · Tim AI Ads</title>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7; --surface: #fcfcfb; --surface-2: #f0efec; --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+  --border: rgba(11,11,11,0.10); --accent: #2a78d6; --accent-ink: #ffffff; --critical: #d03b3b;
+  --critical-bg: rgba(208,59,59,0.10); --info-bg: rgba(42,120,214,0.10); --shadow: 0 1px 2px rgba(0,0,0,0.04);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --surface-2: #262624; --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
+    --border: rgba(255,255,255,0.10); --accent: #3987e5; --critical-bg: rgba(208,59,59,0.18);
+    --info-bg: rgba(57,135,229,0.16); --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface: #1a1a19; --surface-2: #262624; --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
+  --border: rgba(255,255,255,0.10); --accent: #3987e5; --critical-bg: rgba(208,59,59,0.18);
+  --info-bg: rgba(57,135,229,0.16); --shadow: none;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px 16px;
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--page); color: var(--ink);
+}
+.card {
+  width: 100%; max-width: 380px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+  padding: 28px 24px; box-shadow: var(--shadow);
+}
+.brand { font-weight: 700; font-size: 18px; }
+.brand small { display: block; color: var(--muted); font-weight: 400; font-size: 13px; }
+h1 { font-size: 20px; margin: 22px 0 6px; }
+p.sub { color: var(--ink-2); margin: 0 0 18px; font-size: 14px; }
+label { display: block; font-size: 13px; color: var(--ink-2); margin: 0 0 14px; }
+input {
+  display: block; width: 100%; margin-top: 6px; padding: 11px 12px; font: inherit; color: var(--ink);
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 9px;
+}
+input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+button {
+  width: 100%; padding: 12px; border: 0; border-radius: 9px; background: var(--accent); color: var(--accent-ink);
+  font: inherit; font-weight: 600; cursor: pointer;
+}
+button[disabled] { opacity: .6; cursor: wait; }
+.error { background: var(--critical-bg); color: var(--critical); border-radius: 9px; padding: 10px 12px; font-size: 14px;
+  margin: 0 0 14px; }
+.note { background: var(--info-bg); border-radius: 9px; padding: 10px 12px; font-size: 13px; color: var(--ink-2);
+  margin: 16px 0 0; }
+.show { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-2); margin: -4px 0 16px; }
+.show input { width: auto; margin: 0; }
+</style>
+</head>
+<body>
+<main class="card">
+  <div class="brand">📈 Tim AI Ads<small>Dashboard Owner</small></div>
+  <h1 id="title">Masuk</h1>
+  <p class="sub" id="sub">Masukkan password dashboard.</p>
+  <div class="error" id="error" hidden></div>
+  <form id="form" autocomplete="on">
+    <input type="text" name="username" value="owner" autocomplete="username" hidden>
+    <label>Password<input type="password" id="password" autocomplete="current-password" required autofocus></label>
+    <label id="confirm-row" hidden>Ulangi password<input type="password" id="confirm" autocomplete="new-password"></label>
+    <label class="show"><input type="checkbox" id="show"> Tampilkan password</label>
+    <button id="submit">Masuk</button>
+  </form>
+  <div class="note" id="note" hidden></div>
+</main>
+<script>
+const $ = s => document.querySelector(s);
+let setup = false;
+
+function showError(msg) { $("#error").textContent = msg; $("#error").hidden = !msg; }
+
+async function post(path, body) {
+  const res = await fetch(path, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Gagal (HTTP ${res.status})`);
+  return data;
+}
+
+(async () => {
+  try {
+    const s = await (await fetch("/api/auth/state")).json();
+    setup = s.setup_needed;
+    if (setup) {
+      $("#title").textContent = "Buat password dashboard";
+      $("#sub").textContent = "Pertama kali dibuka: buat password supaya hanya Anda yang bisa masuk.";
+      $("#confirm-row").hidden = false;
+      $("#confirm").required = true;
+      $("#password").autocomplete = "new-password";
+      $("#submit").textContent = "Simpan & masuk";
+      $("#note").hidden = false;
+      $("#note").textContent = s.can_setup
+        ? "Minimal 10 karakter, campur huruf, angka, dan simbol. Contoh pola: tiga kata acak + angka. Simpan di tempat aman; password disimpan sebagai hash sehingga tidak bisa dilihat lagi."
+        : "Password pertama hanya bisa dibuat dari komputer tempat program berjalan.";
+      if (!s.can_setup) $("#submit").disabled = true;
+    }
+  } catch (e) { showError("Dashboard tidak bisa dihubungi. Pastikan program masih berjalan."); }
+})();
+
+$("#show").onchange = e => { for (const id of ["#password", "#confirm"]) $(id).type = e.target.checked ? "text" : "password"; };
+
+$("#form").onsubmit = async e => {
+  e.preventDefault();
+  showError("");
+  $("#submit").disabled = true;
+  try {
+    const password = $("#password").value;
+    if (setup) await post("/api/auth/setup", {password, confirm: $("#confirm").value});
+    else await post("/api/login", {password});
+    location.replace("/");
+  } catch (err) {
+    showError(err.message);
+    $("#password").select();
+  } finally {
+    $("#submit").disabled = false;
+  }
+};
+</script>
+</body>
+</html>
