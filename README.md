@@ -45,13 +45,32 @@ untuk semua orang.
 | Terjadwal | Head of Marketing | Pengingat harian (top-up saldo, dll.) | ⏰ Reminder |
 | Tiap 3 jam | Media Buyer | Mengingatkan tugas manual yang belum dikerjakan | ⏰ Reminder |
 | Tiap 15 menit | Sistem (tanpa AI) | **Auto-pause** campaign RollerAds yang boros / hasilnya jelek | 🚨 Alert Tracking |
+| Tiap 15 menit | Sistem (tanpa AI) | **Auto-scale**: campaign untung diusulkan naik budget/bid | 🎯 Approval |
+| Tiap 15 menit | Sistem (tanpa AI) | Saldo RollerAds menipis, campaign ditolak moderasi / tidak jalan | 🚨 Alert Tracking |
+| Tiap 15 menit | Sistem (tanpa AI) | Rem darurat biaya AI (batas harian) | 🚨 Alert Tracking |
+| Sekali sehari | Tracking Specialist | **Rekonsiliasi konversi** BeMob vs RollerAds (deteksi postback bocor / trafik curang) | 🚨 Alert Tracking |
 
 Semua jadwal bisa diubah di menu Pengaturan pada dashboard (tersimpan di `.env`).
 
-**Alur usulan:** rapat → usulan final → dicek sistem pengaman (batas bid, budget, dan zone harus
-ada di data) → tombol Setuju/Tolak untuk Owner → jika disetujui: **pause campaign** dan **campaign baru**
-langsung dijalankan lewat RollerAds API; blacklist zone, ubah bid, dan ubah budget menjadi **tugas manual**
-→ diingatkan sampai Anda klik "Sudah dikerjakan".
+**Alur usulan:** rapat atau auto-scale → usulan final → dicek sistem pengaman (batas bid, budget, minimal
+jam tayang, zone harus ada di data) → tombol Setuju/Tolak untuk Owner → jika disetujui **semuanya langsung
+dijalankan lewat RollerAds API**: pause/buat campaign, blacklist & whitelist zone, ubah bid, ubah budget
+harian, atur jam tayang (dayparting), dan frequency capping. Hanya jika API gagal, usulan menjadi tugas manual.
+
+**Menilai hasil:** menu 📊 **Rapor Tim** membandingkan angka campaign 3 hari sebelum vs sesudah tiap tindakan,
+jadi terlihat usulan mana yang benar-benar menghasilkan. Menu 👤 **Nilai Pemain** menghitung nilai pemain
+(D1/D7/D30) dan berapa yang deposit lagi — agar campaign tidak dinilai dari CPA murah saja.
+
+## Tes otomatis
+Bagian yang menyangkut uang dan tracking punya tes otomatis. Jalankan sebelum mengubah kode:
+
+```bash
+.venv/Scripts/python.exe -m pip install -r requirements-dev.txt
+.venv/Scripts/python.exe -m pytest
+```
+
+Tes juga berjalan otomatis di GitHub setiap kali kode di-push (lihat `.github/workflows/tests.yml`).
+Tes tidak pernah menyentuh database asli, file `.env`, internet, atau API mana pun.
 
 ## RollerAds API
 Isi `ROLLERADS_API_KEY` (token `sk_api_...` dari account manager RollerAds). Campaign berstatus

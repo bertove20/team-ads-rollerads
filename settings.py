@@ -226,6 +226,9 @@ SCHEMA = [
                 {"value": "0.0.0.0", "label": "Semua perangkat di jaringan / internet (VPS). WAJIB password"},
             ]),
             _f("DASHBOARD_PORT", "Port dashboard", "number", "Default 8090. Jangan pakai port yang sudah dipakai program lain (Laragon memakai 80/8080)."),
+            _f("DASHBOARD_VIEWER_PASSWORD", "Password akun 'lihat saja' (opsional)", "secret",
+               "Untuk orang lain yang boleh melihat data tetapi tidak boleh mengubah apa pun "
+               "(tidak bisa menyetujui usulan, mengubah pengaturan, atau menjalankan AI). Minimal 10 karakter."),
             _f("DASHBOARD_DOMAIN", "Domain dashboard di VPS", "text",
                "Mis. ads.domain-anda.com (tanpa https://). Diisi otomatis oleh script instalasi VPS. Kosongkan di laptop."),
             _f("TIMEZONE", "Zona waktu", "select", "", [
@@ -392,11 +395,16 @@ def save(updates: dict) -> list[str]:
     password = values.get("DASHBOARD_PASSWORD") or ""
     if before.get("DASHBOARD_PASSWORD") and not password:
         raise SettingsError("Password dashboard tidak bisa dihapus, hanya bisa diganti.")
-    if password and password != before.get("DASHBOARD_PASSWORD") and not auth.is_hashed(password):
-        problem = auth.weakness(password)
-        if problem:
-            raise SettingsError(f"Password dashboard: {problem}")
-        values["DASHBOARD_PASSWORD"] = auth.hash_password(password)  # tidak pernah disimpan sebagai teks asli
+    for key, label in (("DASHBOARD_PASSWORD", "Password dashboard"),
+                       ("DASHBOARD_VIEWER_PASSWORD", "Password akun lihat saja")):
+        value = values.get(key) or ""
+        if value and value != before.get(key) and not auth.is_hashed(value):
+            problem = auth.weakness(value)
+            if problem:
+                raise SettingsError(f"{label}: {problem}")
+            values[key] = auth.hash_password(value)  # tidak pernah disimpan sebagai teks asli
+    if values.get("DASHBOARD_VIEWER_PASSWORD") and values["DASHBOARD_VIEWER_PASSWORD"] == values.get("DASHBOARD_PASSWORD"):
+        raise SettingsError("Password akun lihat saja harus berbeda dari password Owner.")
     changed = [k for k in FIELDS if values.get(k, "") != before.get(k, "")]
     if not changed:
         return []

@@ -132,6 +132,63 @@ async def set_status(campaign_id: int, status: str) -> dict:
     return await update(campaign_id, campaign_status=status)
 
 
+async def whitelist_zones(campaign_id: int, zones: list[str]) -> list[int]:
+    """Hanya izinkan zone ini (whitelist). Zone bagus jadi prioritas; zone lain tidak lagi dapat trafik."""
+    ids = sorted({int(z) for z in zones if str(z).isdigit()})
+    if not ids:
+        raise RollerAdsError("Tidak ada ID zone yang valid (harus angka ID zone RollerAds).")
+    await detail(campaign_id)
+    payload = await call("POST", f"/campaigns/{campaign_id}/zone", body={"allow": ids, "deny": []})
+    result = payload.get("response") if isinstance(payload.get("response"), dict) else payload
+    allowed = {int(z) for z in ((result.get("target") or {}).get("allow") or []) if str(z).isdigit()}
+    return [z for z in ids if z in allowed] if allowed else ids
+
+
+def _targetings_of(detail_data: dict) -> dict:
+    """Targeting campaign dalam bentuk yang bisa dikirim balik ke API."""
+    current = detail_data.get("targetings") or {}
+    out = {}
+    for key, value in current.items():
+        if isinstance(value, dict) and "targeting_value" in value:
+            out[key] = {"targeting_type": value.get("targeting_type", key), "targeting_value": value["targeting_value"]}
+    return out
+
+
+async def set_dayparting(campaign_id: int, hours: list[int], timezone: str = "UTC") -> dict:
+    """Iklan hanya jalan pada jam tertentu (0-23, berlaku semua hari). Targeting lain (negara, device) dipertahankan.
+
+    Mengembalikan detail campaign SESUDAH diubah, dan memastikan targeting geo tidak ikut hilang.
+    """
+    wanted = sorted({int(h) for h in hours if 0 <= int(h) <= 23})
+    if not 1 <= len(wanted) <= 24:
+        raise RollerAdsError("Jam tayang harus antara 1 dan 24 jam (angka 0-23).")
+    before = await detail(campaign_id)
+    targetings = _targetings_of(before)
+    had_geo = "geo" in targetings
+    targetings["dayTime"] = {"targeting_type": "dayTime", "targeting_value": {
+        "days": {str(d): wanted for d in range(1, 8)}, "def": False, "timezone": timezone}}
+    await call("POST", f"/campaigns/{campaign_id}", fields={
+        "campaign": {
+            "campaign_title": before["campaign_title"],
+            "campaign_url_target": before["campaign_url_target"],
+            "campaign_bid": before["campaign_bid"],
+        },
+        "targetings": targetings,
+    })
+    after = await detail(campaign_id)
+    if had_geo and "geo" not in (after.get("targetings") or {}):
+        raise RollerAdsError("Targeting negara hilang setelah mengatur jam tayang. Periksa campaign di panel "
+                             "RollerAds sekarang juga.")
+    return after
+
+
+async def set_freq_cap(campaign_id: int, impressions: int, hours: int) -> dict:
+    """Batasi berapa kali satu orang melihat iklan dalam periode tertentu (0 = tanpa batas)."""
+    if not 0 <= impressions <= 99 or not 0 <= hours <= 200:
+        raise RollerAdsError("Frequency cap: jumlah 0-99 dan periode 0-200 jam.")
+    return await update(campaign_id, campaign_freq_impression_cnt=impressions, campaign_freq_impression_hour=hours)
+
+
 async def blacklist_zones(campaign_id: int, zones: list[str]) -> list[int]:
     """Tambahkan zone ke blacklist (deny) campaign. Mengembalikan zone yang benar-benar ada di blacklist sesudahnya."""
     ids = sorted({int(z) for z in zones if str(z).isdigit()})

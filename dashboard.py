@@ -23,12 +23,15 @@ import config
 import data_source
 import landing
 import llm
+import ltv
 import meeting
 import memory
 import rollerads
+import scorecard
 import settings
 import storage
 import tracking
+import watch
 from agents import AGENTS, LEADER
 from telegram_team import Team
 
@@ -326,6 +329,64 @@ async def costs(request: web.Request) -> web.Response:
         "projection_month": round(totals["week"] / 7 * 30, 2),
         "tips": tips,
         "model": ", ".join(sorted({llm.provider_name(config.agent_provider(k)) for k in AGENTS})),
+    })
+
+
+_collect_hits: dict[str, list[float]] = defaultdict(list)
+COLLECT_LIMIT = 120  # maksimal kiriman per IP per menit
+
+
+@routes.get("/collect")
+@routes.post("/collect")
+async def collect(request: web.Request) -> web.Response:
+    """Penerima kejadian pemain dari script di website Owner (pendaftaran & deposit) untuk hitung nilai pemain.
+
+    Terbuka tanpa login (dipanggil browser pengunjung), jadi dibatasi: wajib token, dibatasi jumlah per IP,
+    nilai dibatasi masuk akal, dan txid yang sama tidak dihitung dua kali.
+    """
+    data = dict(request.query)
+    if request.method == "POST":
+        data.update(await body_of(request))
+    if data.get("t") != ltv.token():
+        return web.json_response({"error": "token salah"}, status=403)
+    ip, now = _client_ip(request), time.time()
+    hits = [t for t in _collect_hits[ip] if now - t < 60]
+    _collect_hits[ip] = hits + [now]
+    if len(hits) >= COLLECT_LIMIT:
+        return web.json_response({"error": "terlalu banyak kiriman"}, status=429)
+    click_id = str(data.get("c") or "")[:120]
+    event = "reg" if str(data.get("e") or "").startswith("r") else "dep"
+    try:
+        value = max(0.0, min(float(data.get("v") or 0), 100000.0))
+    except (TypeError, ValueError):
+        value = 0.0
+    txid = str(data.get("x") or "")[:160] or f"{event}-{click_id}-{int(now)}"
+    if not click_id:
+        return web.json_response({"error": "click_id kosong"}, status=400)
+    fresh = storage.add_player_event(click_id, event, value, txid, str(data.get("s") or "")[:120],
+                                     str(data.get("cmp") or "")[:120], str(data.get("z") or "")[:60])
+    return web.json_response({"ok": True, "baru": fresh}, headers={"Access-Control-Allow-Origin": "*"})
+
+
+@routes.get("/api/ltv")
+async def ltv_view(request: web.Request) -> web.Response:
+    data = ltv.report()
+    return web.json_response({**data, "token": ltv.token(), "domain": config.DASHBOARD_DOMAIN})
+
+
+@routes.get("/api/scorecard")
+async def scorecard_view(request: web.Request) -> web.Response:
+    """Rapor: tindakan tim mana yang benar-benar menghasilkan profit."""
+    items = scorecard.outcomes()
+    return web.json_response({
+        "items": items[:60],
+        "summary": scorecard.summary(items),
+        "window_days": scorecard.WINDOW_DAYS,
+        "reconcile": (storage.get(watch.STATE_KEY, {}) or {}).get("reconcile"),
+        "ai_budget": {"cap": config.AI_DAILY_BUDGET_USD, "spent": round(llm.spent_today(0), 4),
+                      "stopped": llm.budget_exceeded()},
+        "autoscale": {"enabled": config.AUTOSCALE_ENABLED, "min_conversions": config.AUTOSCALE_MIN_CONVERSIONS,
+                      "min_roi": config.AUTOSCALE_MIN_ROI_PCT, "step": config.AUTOSCALE_STEP_PCT},
     })
 
 
@@ -728,6 +789,10 @@ async def settings_save(request: web.Request) -> web.Response:
         changed = settings.save((await body_of(request)).get("values", {}))
     except settings.SettingsError as e:
         return web.json_response({"error": str(e)}, status=400)
+    request["audit"] = "pengaturan diubah: " + ", ".join(changed) if changed else "tidak ada perubahan"
+    if "DASHBOARD_VIEWER_PASSWORD" in changed:  # berlaku langsung, tanpa restart
+        config.DASHBOARD_VIEWER_PASSWORD = settings.current().get("DASHBOARD_VIEWER_PASSWORD", "")
+        changed = [k for k in changed if k != "DASHBOARD_VIEWER_PASSWORD"]
     if "DASHBOARD_PASSWORD" in changed:
         # Berlaku langsung (tanpa restart): perangkat lain yang login dengan password lama dikeluarkan.
         config.DASHBOARD_PASSWORD = settings.current().get("DASHBOARD_PASSWORD", "")
@@ -1023,7 +1088,8 @@ SECURITY_HEADERS = {
 }
 
 
-PUBLIC_PATHS = {"/login", "/api/login", "/api/auth/state", "/api/auth/setup"}
+PUBLIC_PATHS = {"/login", "/api/login", "/api/auth/state", "/api/auth/setup",
+                "/collect"}  # /collect dipanggil browser pengunjung website, dilindungi token sendiri
 
 
 def _token(request: web.Request) -> str | None:
@@ -1082,8 +1148,8 @@ async def _login_failed(request: web.Request) -> None:
             log.exception("Peringatan login gagal dikirim")
 
 
-def _start_session(request: web.Request, response: web.Response) -> None:
-    token = auth.create_session(_client_ip(request), request.headers.get("User-Agent", ""))
+def _start_session(request: web.Request, response: web.Response, role: str = "owner") -> None:
+    token = auth.create_session(_client_ip(request), request.headers.get("User-Agent", ""), role)
     https = request.secure or (_via_proxy(request) and request.headers.get("X-Forwarded-Proto", "") == "https")
     response.set_cookie(auth.COOKIE, token, max_age=auth.MAX_AGE_SECONDS, httponly=True, samesite="Strict",
                         secure=https, path="/")
@@ -1098,11 +1164,18 @@ async def guard(request: web.Request, handler):
     if request.method != "GET" and ((origin and urlparse(origin).netloc != request.host)
                                     or request.headers.get("Sec-Fetch-Site") == "cross-site"):
         return web.json_response({"error": "Permintaan dari situs lain ditolak."}, status=403)
-    if request.path not in PUBLIC_PATHS and not (auth.enabled() and auth.check_session(_token(request))):
+    role = auth.session_role(_token(request)) if auth.enabled() else None
+    if request.path not in PUBLIC_PATHS and role is None:
         if request.path.startswith("/api/"):
             return web.json_response({"error": "Sesi login habis. Silakan login lagi.", "login": True}, status=401)
         raise web.HTTPFound("/login")
+    if role == "viewer" and request.method != "GET" and request.path != "/api/logout":
+        return web.json_response({"error": "Akun ini hanya bisa melihat, tidak bisa mengubah."}, status=403)
+    request["role"] = role or "-"
     response = await _handle(request, handler)
+    if request.method != "GET" and request.path not in ("/collect",) and response.status < 400:
+        storage.add_audit(request.get("role", "-"), request.get("role", "-"), _client_ip(request),
+                          request.path, request.get("audit", ""))
     response.headers.update(SECURITY_HEADERS)
     return response
 
@@ -1152,10 +1225,18 @@ async def login(request: web.Request) -> web.Response:
     if not auth.enabled():
         return web.json_response({"error": "Password belum dibuat.", "setup": True}, status=409)
     password = str((await body_of(request)).get("password") or "")
-    if not auth.verify_password(password):
+    role = auth.role_of_password(password)
+    if not role:
         await _login_failed(request)
+        storage.add_audit("?", "-", _client_ip(request), "login gagal", "password salah")
         return web.json_response({"error": "Password salah."}, status=401)
     _fails.pop(_client_ip(request), None)
+    storage.add_audit(role, role, _client_ip(request), "login berhasil", request.headers.get("User-Agent", "")[:120])
+    if role == "viewer":
+        response = web.json_response({"ok": True, "role": role})
+        _start_session(request, response, role)
+        log.info("Login dashboard (lihat saja) dari %s", _client_ip(request))
+        return response
     if not auth.is_hashed(config.DASHBOARD_PASSWORD):  # password lama (teks biasa) -> simpan sebagai hash
         try:
             settings.save({"DASHBOARD_PASSWORD": auth.hash_password(password)})
@@ -1178,7 +1259,9 @@ async def logout(request: web.Request) -> web.Response:
 
 @routes.get("/api/auth/sessions")
 async def auth_sessions(request: web.Request) -> web.Response:
-    return web.json_response({"sessions": auth.session_list(_token(request))})
+    return web.json_response({"sessions": auth.session_list(_token(request)), "role": request.get("role", "-"),
+                              "viewer_enabled": bool(config.DASHBOARD_VIEWER_PASSWORD),
+                              "audit": storage.list_audit(100)})
 
 
 @routes.post("/api/auth/logout-others")

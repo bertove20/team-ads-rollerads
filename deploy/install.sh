@@ -97,10 +97,20 @@ cat > /usr/local/bin/ai-ads-backup <<EOF
 #!/usr/bin/env bash
 exec bash "$APP_DIR/deploy/backup.sh" "\$@"
 EOF
-chmod 755 /usr/local/bin/ai-ads-password /usr/local/bin/ai-ads-update /usr/local/bin/ai-ads-backup
+cat > /usr/local/bin/ai-ads-restore-test <<EOF
+#!/usr/bin/env bash
+exec bash "$APP_DIR/deploy/restore-test.sh" "\$@"
+EOF
+chmod 755 /usr/local/bin/ai-ads-password /usr/local/bin/ai-ads-update /usr/local/bin/ai-ads-backup \
+  /usr/local/bin/ai-ads-restore-test
 
-# Backup harian otomatis jam 03:00 (database + .env, disimpan 14 hari)
-echo "0 3 * * * root bash $APP_DIR/deploy/backup.sh >/dev/null 2>&1" > /etc/cron.d/ai-ads-backup
+# Backup harian jam 03:00, uji backup tiap Senin 03:30, dan pengawas "program mati" tiap 5 menit.
+cat > /etc/cron.d/ai-ads-team <<EOF
+0 3 * * * root bash $APP_DIR/deploy/backup.sh >/dev/null 2>&1
+30 3 * * 1 root bash $APP_DIR/deploy/restore-test.sh >/dev/null 2>&1
+*/5 * * * * root bash $APP_DIR/deploy/heartbeat-check.sh >/dev/null 2>&1
+EOF
+rm -f /etc/cron.d/ai-ads-backup   # nama lama dari versi sebelumnya
 
 # ------------------------------------------------------------------ HTTPS (Caddy)
 if [[ -n "$DOMAIN" ]]; then
@@ -179,5 +189,7 @@ echo " Isi API key & bot Telegram : dashboard → Pengaturan (lalu klik Jalankan
 echo " Ganti password dashboard   : sudo ai-ads-password"
 echo " Update program             : sudo ai-ads-update"
 echo " Backup manual              : sudo ai-ads-backup   (otomatis tiap hari 03:00)"
+echo " Uji backup bisa dipakai    : sudo ai-ads-restore-test  (otomatis tiap Senin)"
+echo " Program mati/membeku       : dicek tiap 5 menit, Anda diberi tahu lewat Telegram"
 echo " Lihat log                  : sudo journalctl -u $SERVICE -f"
 echo "================================================================"

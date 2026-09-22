@@ -325,6 +325,8 @@ details.more summary { cursor: pointer; color: var(--accent); font-size: 14px; m
     <a href="#zone" data-page="zone">🧩 Zone</a>
     <a href="#tren" data-page="tren">📈 Tren</a>
     <a href="#usulan" data-page="usulan">🎯 Usulan &amp; Tugas <span class="count" id="nav-count" hidden></span></a>
+    <a href="#ltv" data-page="ltv">👤 Nilai Pemain</a>
+    <a href="#rapor" data-page="rapor">📊 Rapor Tim</a>
     <a href="#rapat" data-page="rapat">💬 Rapat &amp; Laporan</a>
     <a href="#tanya" data-page="tanya">🙋 Tanya Tim</a>
     <a href="#ingatan" data-page="ingatan">🧠 Ingatan Tim</a>
@@ -520,6 +522,56 @@ details.more summary { cursor: pointer; color: var(--accent); font-size: 14px; m
       </div>
     </section>
 
+    <!-- ================= NILAI PEMAIN (LTV) ================= -->
+    <section class="page" id="page-ltv">
+      <p class="page-intro">BeMob hanya tahu konversi pertama. Halaman ini menjawab yang lebih penting:
+        <b>apakah pemainnya bernilai?</b> Script di website mengirim setiap pendaftaran &amp; deposit ke dashboard Anda,
+        lalu sistem menghitung nilai rata-rata per pemain setelah 1, 7, dan 30 hari, serta berapa yang deposit lagi.
+        CPA murah tetapi pemain langsung hilang = rugi.</p>
+      <div id="ltv-setup"></div>
+      <div class="grid kpi" id="ltv-kpi"></div>
+      <div class="card">
+        <h2>Per campaign</h2>
+        <p class="sub">Campaign dengan nilai pemain tertinggi layak dinaikkan budget-nya, walau CPA-nya lebih mahal.</p>
+        <div class="table-wrap"><table id="tb-ltv-campaign"></table></div>
+      </div>
+      <div class="card">
+        <h2>Per hari pendaftaran (cohort)</h2>
+        <p class="sub">Pemain dikelompokkan menurut hari pertama mereka datang, jadi terlihat apakah kualitasnya membaik.</p>
+        <div class="table-wrap"><table id="tb-ltv-day"></table></div>
+      </div>
+    </section>
+
+    <!-- ================= RAPOR TIM ================= -->
+    <section class="page" id="page-rapor">
+      <p class="page-intro">Nilai kerja tim AI dari hasil nyata: tiap tindakan dibandingkan angka campaign
+        <b>3 hari sebelum</b> vs <b>3 hari sesudah</b>. Dari sini terlihat usulan siapa yang menghasilkan profit dan mana
+        yang meleset. Tim membaca rapor ini setiap rapat, jadi mereka belajar dari hasil.</p>
+      <div class="grid kpi" id="rapor-kpi"></div>
+      <div id="rapor-banners"></div>
+      <div class="grid two">
+        <div class="card">
+          <h2>Per sumber usulan</h2>
+          <p class="sub">Rapat tim, auto-scale, auto-pause, atau keputusan Anda sendiri.</p>
+          <div class="table-wrap"><table id="tb-rapor-source"></table></div>
+        </div>
+        <div class="card">
+          <h2>Per jenis tindakan</h2>
+          <p class="sub">Mana yang paling berhasil: blacklist zone, ubah bid, naikkan budget, dan seterusnya.</p>
+          <div class="table-wrap"><table id="tb-rapor-action"></table></div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Riwayat tindakan &amp; hasilnya</h2>
+        <div class="table-wrap"><table id="tb-rapor-items"></table></div>
+      </div>
+      <div class="card">
+        <h2>🔍 Rekonsiliasi konversi (BeMob vs RollerAds)</h2>
+        <p class="sub">Selisih besar = postback bocor, konversi dobel, atau trafik curang. Dicek otomatis sekali sehari.</p>
+        <div class="table-wrap"><table id="tb-rapor-conv"></table></div>
+      </div>
+    </section>
+
     <!-- ================= RAPAT ================= -->
     <section class="page" id="page-rapat">
       <p class="page-intro">Semua obrolan dan laporan tim AI tersimpan di sini, sama seperti di grup Telegram.</p>
@@ -687,6 +739,10 @@ details.more summary { cursor: pointer; color: var(--accent); font-size: 14px; m
           <button class="btn" id="logout-others">Keluarkan perangkat lain</button>
           <button class="btn danger" id="logout-me">🚪 Keluar dari perangkat ini</button>
         </div>
+        <details class="more"><summary>📜 Catatan audit (siapa mengubah apa)</summary>
+          <p class="sub">Semua perubahan lewat dashboard dicatat: login, ubah pengaturan, setujui usulan, dan lainnya.</p>
+          <div class="table-wrap"><table id="tb-audit"></table></div>
+        </details>
       </div>
       <div id="set-groups"></div>
       <div class="savebar" id="set-savebar" hidden>
@@ -778,10 +834,16 @@ async function logout() {
 $("#nav-logout").onclick = e => { e.preventDefault(); if (confirm("Keluar dari dashboard?")) logout(); };
 
 async function loadSessions() {
-  const {sessions} = await api("/api/auth/sessions");
-  $("#tb-sessions").innerHTML = `<thead><tr><th>Perangkat</th><th>IP</th><th>Login</th><th>Terakhir aktif</th></tr></thead>
-    <tbody>${sessions.map(s => `<tr><td style="white-space:normal;max-width:360px">${s.current ? "<b>Perangkat ini</b> · " : ""}${esc(s.agent || "-")}</td>
+  const d = await api("/api/auth/sessions");
+  $("#tb-sessions").innerHTML = `<thead><tr><th>Perangkat</th><th>Akses</th><th>IP</th><th>Login</th><th>Terakhir aktif</th></tr></thead>
+    <tbody>${d.sessions.map(s => `<tr><td style="white-space:normal;max-width:320px">${s.current ? "<b>Perangkat ini</b> · " : ""}${esc(s.agent || "-")}</td>
+      <td><span class="badge ${s.role === "owner" ? "good" : ""}">${s.role === "owner" ? "Owner" : "Lihat saja"}</span></td>
       <td>${esc(s.ip)}</td><td>${timeFmt(s.created)}</td><td>${timeFmt(s.last)}</td></tr>`).join("")}</tbody>`;
+  $("#tb-audit").innerHTML = d.audit.length ? `<thead><tr><th>Waktu</th><th>Akses</th><th>IP</th><th>Tindakan</th><th>Keterangan</th></tr></thead>
+    <tbody>${d.audit.map(a => `<tr><td>${timeFmt(a.ts)}</td><td>${esc(a.role === "owner" ? "Owner" : a.role === "viewer" ? "Lihat saja" : a.role)}</td>
+      <td>${esc(a.ip)}</td><td>${esc(a.action)}</td><td style="white-space:normal;max-width:320px">${esc(a.detail || "")}</td></tr>`).join("")}</tbody>`
+    : `<tbody><tr><td class="empty">Belum ada catatan.</td></tr></tbody>`;
+  if (d.role === "viewer") document.body.classList.add("viewer-only");
 }
 
 let toastTimer;
@@ -905,7 +967,7 @@ function divergingBar(id, labels, values, label, horizontal = false) {
 // ============================================================ state & routing
 const TITLES = {
   ringkasan: "Ringkasan", campaign: "Campaign", rollerads: "RollerAds", zone: "Zone", tren: "Tren", usulan: "Usulan & Tugas",
-  rapat: "Rapat & Laporan", tanya: "Tanya Tim", ingatan: "Ingatan Tim", tracking: "Script Tracking", lp: "Landing Page", biaya: "Biaya AI", pengaturan: "Pengaturan",
+  ltv: "Nilai Pemain", rapor: "Rapor Tim", rapat: "Rapat & Laporan", tanya: "Tanya Tim", ingatan: "Ingatan Tim", tracking: "Script Tracking", lp: "Landing Page", biaya: "Biaya AI", pengaturan: "Pengaturan",
   bantuan: "Bantuan",
 };
 let current = "ringkasan";
@@ -1147,7 +1209,8 @@ PAGES.rollerads = async () => {
     + `<li><span class="up">✓</span><span class="hint">Campaign yang Anda aktifkan lagi setelah di-pause otomatis tidak di-pause ulang hari itu.</span></li>`;
 
   const ACT = {paused: ["warning", "Pause"], active: ["good", "Aktifkan"], created: ["info", "Dibuat"],
-    blacklist: ["warning", "Blacklist zone"], bid: ["info", "Ubah bid"], budget: ["info", "Ubah budget"]};
+    blacklist: ["warning", "Blacklist zone"], bid: ["info", "Ubah bid"], budget: ["info", "Ubah budget"],
+    whitelist: ["good", "Whitelist zone"], jam: ["info", "Jam tayang"], frekuensi: ["info", "Frequency cap"]};
   $("#tb-ra-log").innerHTML = d.log.length ? `<thead><tr><th>Waktu</th><th>Campaign</th><th>Tindakan</th><th>Oleh / alasan</th></tr></thead>
     <tbody>${d.log.map(l => `<tr><td>${timeFmt(l.ts)}</td><td>${esc(l.title)}</td>
       <td><span class="badge ${(ACT[l.action] || [""])[0]}">${(ACT[l.action] || ["", esc(l.action)])[1]}</span></td>
@@ -1325,6 +1388,99 @@ PAGES.usulan = async () => {
     toast("✔️ Tugas tercatat selesai.");
     await refresh();
   }));
+};
+
+function ltvRow(r, first) {
+  const d = (v) => v === null || v === undefined ? "–" : money(v);
+  return `<tr><td><b>${esc(first)}</b></td><td class="num">${num(r.players)}</td><td class="num">${num(r.depositors)}
+    <div class="sub" style="margin:0">${r.cr_deposit}%</div></td>
+    <td class="num">${d(r.arpu_d1)}</td><td class="num">${d(r.arpu_d7)}</td><td class="num">${d(r.arpu_d30)}</td>
+    <td class="num">${d(r.arpu)}</td><td class="num">${r.repeat_rate === null ? "–" : r.repeat_rate + "%"}</td>
+    <td class="num">${d(r.revenue)}</td></tr>`;
+}
+const LTV_HEAD = `<thead><tr><th></th><th class="num">Pemain</th><th class="num">Deposit</th><th class="num">Nilai D1</th>
+  <th class="num">Nilai D7</th><th class="num">Nilai D30</th><th class="num">Rata-rata</th><th class="num">Repeat</th>
+  <th class="num">Total</th></tr></thead>`;
+
+PAGES.ltv = async () => {
+  const d = await api("/api/ltv");
+  if (!d.domain) {
+    $("#ltv-setup").innerHTML = `<div class="banner warning"><strong>Butuh dashboard dengan domain (VPS)</strong>
+      Script di website mengirim data ke alamat dashboard Anda, jadi dashboard harus bisa dibuka dari internet.
+      Ikuti <b>README-VPS.md</b>, lalu isi domain di <a href="#pengaturan">Pengaturan</a> → Admin dashboard.</div>`;
+  } else {
+    $("#ltv-setup").innerHTML = `<div class="banner info"><strong>Cara mengaktifkan</strong>
+      Buka <a href="#tracking">🔌 Script Tracking</a> → klik <b>Buat ulang</b> script untuk tiap website, lalu tempel
+      ulang script barunya. Script baru otomatis mengirim data ke:
+      <br><code>${esc(d.collect_url)}</code> (token: <code>${esc(d.token)}</code>)
+      <br>Data yang dikirim hanya click_id, jenis kejadian, dan nilainya. Tidak ada data pribadi pemain.
+      <br>Kejadian tercatat sejauh ini: <b>${num(d.events)}</b>.</div>`;
+  }
+  if (!d.ready) {
+    $("#ltv-kpi").innerHTML = "";
+    $("#tb-ltv-campaign").innerHTML = `<tbody><tr><td class="empty">Belum ada data pemain. Terisi otomatis setelah script baru terpasang dan ada pendaftaran/deposit.</td></tr></tbody>`;
+    $("#tb-ltv-day").innerHTML = "";
+    return;
+  }
+  const t = d.total;
+  $("#ltv-kpi").innerHTML = [
+    ["Pemain 30 hari", num(t.players), `${num(t.depositors)} deposit (${t.cr_deposit}%)`],
+    ["Nilai rata-rata / pemain", money(t.arpu), "seluruh deposit dibagi jumlah pemain"],
+    ["Nilai D7", t.arpu_d7 === null ? "–" : money(t.arpu_d7), `${num(t.matured_d7)} pemain sudah 7 hari`],
+    ["Nilai D30", t.arpu_d30 === null ? "–" : money(t.arpu_d30), `${num(t.matured_d30)} pemain sudah 30 hari`],
+    ["Deposit ulang", t.repeat_rate === null ? "–" : t.repeat_rate + "%", "dari yang pernah deposit"],
+  ].map(([l, v, n]) => `<div class="tile"><div class="label">${l}</div><div class="value">${v}</div><div class="note">${esc(n)}</div></div>`).join("");
+  $("#tb-ltv-campaign").innerHTML = LTV_HEAD.replace("<th></th>", "<th>Campaign</th>")
+    + `<tbody>${d.by_campaign.map(c => ltvRow(c, c.name === "-" ? "(tanpa nama campaign)" : c.name)).join("")}</tbody>`;
+  $("#tb-ltv-day").innerHTML = LTV_HEAD.replace("<th></th>", "<th>Hari pertama datang</th>")
+    + `<tbody>${[...d.by_day].reverse().map(r => ltvRow(r, r.day)).join("")}</tbody>`;
+};
+
+const VERDICT = {berhasil: ["good", "✓ Berhasil"], gagal: ["critical", "✕ Gagal"], netral: ["", "= Netral"],
+  "belum jelas": ["", "… Belum jelas"]};
+
+function raporTable(data, label) {
+  const rows = Object.entries(data).sort((a, b) => b[1].total - a[1].total);
+  return rows.length ? `<thead><tr><th>${label}</th><th class="num">Tindakan</th><th class="num">Berhasil</th>
+    <th class="num">Gagal</th><th class="num">Belum jelas</th><th class="num">Perubahan profit/hari</th></tr></thead>
+    <tbody>${rows.map(([k, b]) => `<tr><td><b>${esc(k)}</b>${b.akurasi !== null ? `<div class="sub" style="margin:0">${b.akurasi}% berhasil</div>` : ""}</td>
+      <td class="num">${b.total}</td><td class="num up">${b.berhasil}</td><td class="num down">${b.gagal}</td>
+      <td class="num">${b["belum jelas"]}</td>
+      <td class="num ${b.profit_delta >= 0 ? "up" : "down"}">${b.profit_delta >= 0 ? "+" : ""}${money(b.profit_delta)}</td></tr>`).join("")}</tbody>`
+    : `<tbody><tr><td class="empty">Belum ada tindakan yang bisa dinilai.</td></tr></tbody>`;
+}
+
+PAGES.rapor = async () => {
+  const d = await api("/api/scorecard");
+  const s = d.summary, all = Object.values(s.by_source);
+  const sum = (k) => all.reduce((t, b) => t + b[k], 0);
+  const dinilai = sum("total") - sum("belum jelas");
+  $("#rapor-kpi").innerHTML = [
+    ["Tindakan dinilai", `${dinilai} / ${s.total}`, `jendela ${d.window_days} hari sebelum vs sesudah`],
+    ["Berhasil", `${sum("berhasil")}`, dinilai ? `${Math.round(sum("berhasil") / dinilai * 100)}% dari yang dinilai` : "belum ada"],
+    ["Gagal", `${sum("gagal")}`, "dievaluasi dari profit harian"],
+    ["Perubahan profit", `${sum("profit_delta") >= 0 ? "+" : ""}${money(all.reduce((t, b) => t + b.profit_delta, 0))}`, "per hari, total semua tindakan"],
+    ["Biaya AI hari ini", `${money(d.ai_budget.spent)} / ${money(d.ai_budget.cap)}`, d.ai_budget.stopped ? "AI DIHENTIKAN sampai besok" : "batas harian"],
+  ].map(([l, v, n]) => `<div class="tile"><div class="label">${l}</div><div class="value">${v}</div><div class="note">${esc(n)}</div></div>`).join("");
+  const banners = [];
+  if (d.ai_budget.stopped) banners.push(`<div class="banner critical"><strong>🛑 Rem darurat biaya AI aktif</strong>Biaya AI hari ini sudah melewati batas ${money(d.ai_budget.cap)}. Semua AI berhenti sampai besok. Ubah batas di <a href="#pengaturan">Pengaturan</a> → Batas pengaman.</div>`);
+  if (!d.autoscale.enabled) banners.push(`<div class="banner warning"><strong>Auto-scale mati</strong>Campaign yang untung tidak akan diusulkan naik budget/bid. Aktifkan di <a href="#pengaturan">Pengaturan</a>.</div>`);
+  else banners.push(`<div class="banner info"><strong>Auto-scale aktif</strong>Campaign dengan ≥${d.autoscale.min_conversions} konversi dan ROI ≥${d.autoscale.min_roi}% kemarin diusulkan naik ${d.autoscale.step}% (tetap butuh persetujuan Anda).</div>`);
+  $("#rapor-banners").innerHTML = banners.join("");
+  $("#tb-rapor-source").innerHTML = raporTable(s.by_source, "Sumber");
+  $("#tb-rapor-action").innerHTML = raporTable(s.by_action, "Tindakan");
+  $("#tb-rapor-items").innerHTML = d.items.length ? `<thead><tr><th>Waktu</th><th>Campaign</th><th>Tindakan</th><th>Sumber</th><th>Hasil</th></tr></thead>
+    <tbody>${d.items.map(i => { const v = VERDICT[i.verdict] || ["", i.verdict]; return `<tr>
+      <td>${timeFmt(i.ts)}</td><td>${esc(i.campaign)}</td>
+      <td style="white-space:normal;max-width:260px"><b>${esc(i.action_name)}</b>${i.reason ? `<div class="sub" style="margin:0">${esc(i.reason)}</div>` : ""}</td>
+      <td>${esc(i.source)}</td>
+      <td style="white-space:normal;max-width:280px"><span class="badge ${v[0]}">${v[1]}</span><div class="sub" style="margin:2px 0 0">${esc(i.note)}</div></td></tr>`; }).join("")}</tbody>`
+    : `<tbody><tr><td class="empty">Belum ada tindakan. Rapor terisi setelah tim menjalankan tindakan pertama.</td></tr></tbody>`;
+  const rec = d.reconcile;
+  $("#tb-rapor-conv").innerHTML = rec && rec.rows.length ? `<thead><tr><th>Campaign (${esc(rec.day)})</th><th class="num">BeMob</th><th class="num">RollerAds</th><th class="num">Selisih</th></tr></thead>
+    <tbody>${rec.rows.map(r => `<tr><td>${esc(r.title)}</td><td class="num">${num(r.bemob)}</td><td class="num">${num(r.rollerads)}</td>
+      <td class="num ${r.diff_pct >= 30 ? "down" : "up"}">${r.diff_pct}%</td></tr>`).join("")}</tbody>`
+    : `<tbody><tr><td class="empty">Belum ada pengecekan. Butuh BeMob API + RollerAds API aktif; dicek otomatis sekali sehari.</td></tr></tbody>`;
 };
 
 PAGES.rapat = async () => {

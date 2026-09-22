@@ -24,6 +24,7 @@ from telegram.ext import (
 import actions
 import analysis
 import autopause
+import autoscale
 import checks
 import config
 import dashboard
@@ -35,6 +36,7 @@ import memory
 import rollerads
 import storage
 import tracking
+import watch
 from actions import open_tasks_text
 from agents import AGENTS, LEADER
 from telegram_team import Team
@@ -126,6 +128,8 @@ async def job_health(context: ContextTypes.DEFAULT_TYPE) -> None:
         await tracking.monitor(team_of(context))
     except Exception:  # noqa: BLE001 - pemantauan script tidak boleh menghentikan cek landing page
         log.exception("Pemantauan script tracking gagal")
+    await watch.run(team_of(context))       # biaya AI, saldo, moderasi campaign, selisih konversi
+    await autoscale.run(team_of(context))   # usulan menaikkan budget/bid campaign yang untung
 
 
 async def job_analyst(context: ContextTypes.DEFAULT_TYPE, force: bool = False) -> None:
@@ -626,6 +630,7 @@ async def run_dashboard_only() -> None:
         try:
             await checks.health_check(team)
             await tracking.monitor(team)
+            await watch.run(team)
         except Exception:  # noqa: BLE001 - jangan sampai dashboard ikut mati
             log.exception("Cek landing page gagal")
         await asyncio.sleep(config.HEALTHCHECK_MINUTES * 60)

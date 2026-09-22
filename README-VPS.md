@@ -153,6 +153,7 @@ Kalau nanti punya domain, cukup jalankan ulang `sudo bash deploy/install.sh ads.
 | Ganti password dashboard | `sudo ai-ads-password` |
 | Update ke versi terbaru | `sudo ai-ads-update` |
 | Backup sekarang | `sudo ai-ads-backup` |
+| Uji backup benar-benar bisa dipakai | `sudo ai-ads-restore-test` (otomatis tiap Senin) |
 
 ## Update program
 
@@ -188,6 +189,24 @@ sudo cp restore/.env /opt/ai-ads-team/.env
 sudo chown aiads:aiads /opt/ai-ads-team/data/team.db /opt/ai-ads-team/.env
 sudo systemctl start ai-ads-team
 ```
+
+## Pengawas "program mati"
+
+Program menulis tanda hidup setiap pemeriksaan rutin. Tiap **5 menit**, cron memeriksanya:
+- Kalau service mati atau program membeku lebih dari 20 menit, Anda **diberi tahu lewat Telegram** dan program
+  dijalankan ulang otomatis.
+- Saat sudah normal lagi, Anda juga diberi tahu.
+
+Uji coba: `sudo systemctl stop ai-ads-team`, tunggu 5 menit, lalu cek pesan di grup Telegram.
+
+## Akun "lihat saja"
+
+Kalau ada orang lain yang perlu melihat data tetapi tidak boleh mengubah apa pun (tidak bisa menyetujui usulan,
+mengubah pengaturan, atau menjalankan AI), isi **Pengaturan → Admin dashboard → Password akun 'lihat saja'**.
+Mereka login di halaman yang sama dengan password itu.
+
+Semua perubahan lewat dashboard tercatat di **Pengaturan → Perangkat yang sedang login → Catatan audit**
+(login, ganti pengaturan, setujui usulan, dan lainnya, lengkap dengan IP dan waktunya).
 
 ## Keamanan yang sudah terpasang
 

@@ -37,7 +37,8 @@ STEPS = [
              "bahwa usulan final akan dikirim ke Owner untuk persetujuan."),
 ]
 
-ACTION_TYPES = ["blacklist_zones", "change_bid", "pause_campaign", "change_daily_budget", "create_lander", "other"]
+ACTION_TYPES = ["blacklist_zones", "whitelist_zones", "change_bid", "pause_campaign", "change_daily_budget",
+                "set_dayparting", "set_freq_cap", "create_lander", "other"]
 
 PROPOSAL_SCHEMA = {
     "type": "object",
@@ -55,9 +56,10 @@ PROPOSAL_SCHEMA = {
                     "reason": {"type": "string"},
                     "website": {"type": "string"},
                     "brief": {"type": "string"},
+                    "hours": {"type": "array", "items": {"type": "integer"}},
                 },
                 "required": ["type", "campaign", "zones", "current_value", "new_value", "reason", "website",
-                             "brief"],
+                             "brief", "hours"],
                 "additionalProperties": False,
             },
         }
@@ -100,6 +102,23 @@ def validate(actions: list[dict], snap: analysis.Snapshot) -> tuple[list[dict], 
                     f"${config.MAX_CAMPAIGN_DAILY_BUDGET_USD:g}."
                 )
                 continue
+        elif kind == "whitelist_zones":
+            zones = [z for z in action["zones"] if z in snap.all_zones and str(z).isdigit()]
+            if len(zones) < 2:
+                rejected.append("Whitelist ditolak: minimal 2 zone yang benar-benar ada di data.")
+                continue
+            action = {**action, "zones": zones}
+        elif kind == "set_dayparting":
+            hours = sorted({int(h) for h in (action.get("hours") or []) if 0 <= int(h) <= 23})
+            if len(hours) < 6:
+                rejected.append(f"Jam tayang {action['campaign']} ditolak: minimal 6 jam per hari "
+                                "supaya campaign tidak kehilangan terlalu banyak trafik.")
+                continue
+            action = {**action, "hours": hours}
+        elif kind == "set_freq_cap":
+            if not 1 <= action["new_value"] <= 99:
+                rejected.append(f"Frequency cap {action['campaign']} ditolak: jumlah harus 1-99.")
+                continue
         elif kind == "create_lander":
             wanted = (action.get("website") or "").lower()
             host = next((h for h in tracking.sites() if wanted and (wanted == h or wanted in h or h in wanted)), None)
@@ -124,6 +143,16 @@ def describe_action(action: dict) -> str:
         what = f"Ubah bid {action['campaign']}: ${action['current_value']:g} -> ${action['new_value']:g}"
     elif kind == "pause_campaign":
         what = f"Pause campaign {action['campaign']}"
+    elif kind == "whitelist_zones":
+        what = (f"Whitelist {len(action['zones'])} zone di {action['campaign']} "
+                "(hanya zone ini yang dapat trafik):\n" + ", ".join(action["zones"]))
+    elif kind == "set_dayparting":
+        hours = action.get("hours") or []
+        what = (f"Atur jam tayang {action['campaign']}: hanya jam " + ", ".join(f"{h:02d}" for h in hours)
+                + f" ({len(hours)} jam/hari)")
+    elif kind == "set_freq_cap":
+        period = int((action.get("hours") or [24])[0]) or 24
+        what = (f"Batasi tayangan per orang di {action['campaign']}: maks {action['new_value']:g}x per {period} jam")
     elif kind == "create_lander":
         what = f"Buat landing page baru (tim AI) untuk {action['website']}: {action.get('brief') or '-'}"
     elif kind == "create_campaign":
@@ -190,7 +219,9 @@ async def run_meeting(team: Team, reason: str) -> None:
                 f"{facts}\n\nTRANSKRIP RAPAT:\n" + "\n\n".join(transcript)
                 + "\n\nUbah keputusan final rapat menjadi daftar tindakan terstruktur (maks "
                 f"{MAX_ACTIONS}). Hanya tindakan yang disetujui Head of Marketing. Gunakan ID zone dan "
-                "nama campaign persis seperti di data. Untuk create_lander isi website (host dari Status tracking) "
+                "nama campaign persis seperti di data. Untuk set_dayparting isi hours (jam 0-23 yang boleh tayang, "
+                "minimal 6 jam). Untuk set_freq_cap isi new_value (maks tayangan per orang) dan hours[0] (periode "
+                "jam). Untuk whitelist_zones isi zones (minimal 2 zone bagus). Untuk create_lander isi website (host dari Status tracking) "
                 "dan brief (ide landing page). Isi field yang tidak relevan dengan string "
                 "kosong, list kosong, atau 0. Jika tidak ada tindakan, kembalikan list kosong.",
                 schema=PROPOSAL_SCHEMA, task="rapat",

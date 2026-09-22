@@ -1,0 +1,5 @@
+# Hanya untuk menjalankan tes otomatis (tidak dibutuhkan saat program berjalan normal):
+#   .venv/Scripts/python.exe -m pip install -r requirements-dev.txt
+#   .venv/Scripts/python.exe -m pytest
+-r requirements.txt
+pytest>=8.0

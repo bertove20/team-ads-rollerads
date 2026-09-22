@@ -26,6 +26,7 @@ import bemob
 import checks
 import config
 import llm
+import ltv
 import storage
 from agents import AGENTS
 from telegram_team import Team
@@ -270,6 +271,9 @@ async def static_problems(code: str, host: str, postback: str) -> tuple[list[str
     if re.search(r"\beval\s*\(|new\s+Function\s*\(|document\.write\s*\(", code):
         problems.append("Dilarang memakai eval, new Function, atau document.write.")
     allowed = {postback_host, host, _root(host)}
+    collect = ltv.collect_url()
+    if collect:  # pencatat nilai pemain milik Owner sendiri
+        allowed.add(host_of(collect))
     outside = sorted({h.lower() for h in re.findall(r"https?://([A-Za-z0-9.-]+)", code)
                       if h.lower() not in allowed and not h.lower().endswith("." + _root(host))})
     if outside:
@@ -295,8 +299,10 @@ def template_code(postback: str) -> str:
     """Template standar yang sudah teruji (dipakai jika semua AI gagal), diisi dengan pengaturan Owner."""
     html = TEMPLATE_PATH.read_text(encoding="utf-8")
     code = re.search(r"<script>(.*?)</script>", html, re.S).group(1).strip()
+    collect = ltv.collect_url() or ""
     for name, value in (("POSTBACK", f"'{postback}'"), ("PAYOUT_DAFTAR", f"{config.TRACK_REG_PAYOUT_USD:g}"),
-                        ("KURS_USD", f"{config.TRACK_KURS_USD:g}"), ("BAGIAN_DEPOSIT", f"{config.TRACK_DEPOSIT_SHARE:g}")):
+                        ("KURS_USD", f"{config.TRACK_KURS_USD:g}"), ("BAGIAN_DEPOSIT", f"{config.TRACK_DEPOSIT_SHARE:g}"),
+                        ("COLLECT_URL", f"'{collect}'"), ("COLLECT_TOKEN", f"'{ltv.token() if collect else ''}'")):
         code = re.sub(rf"(var {name}\s*=\s*)[^;]+;", lambda m, v=value: m.group(1) + v + ";", code, count=1)
     return code
 
@@ -331,7 +337,20 @@ Syarat wajib kode:
    tanpa reload (AJAX), jadi pakai event delegation dan/atau MutationObserver.
 6. Pengaturan (URL postback, payout, kurs, porsi deposit, DEBUG) ditaruh sebagai variabel di baris atas dengan
    komentar bahasa Indonesia. DEBUG=false; jika true, tulis log console berawalan [BeMob].
-7. Kode ditempel di footer semua halaman, jadi harus aman dijalankan sebelum maupun sesudah DOM siap."""
+7. Kode ditempel di footer semua halaman, jadi harus aman dijalankan sebelum maupun sesudah DOM siap.
+{_collect_rule()}"""
+
+
+def _collect_rule() -> str:
+    """Aturan tambahan: kirim salinan kejadian ke dashboard Owner untuk menghitung nilai pemain (LTV)."""
+    url = ltv.collect_url()
+    if not url:
+        return ""
+    return (f"""8. Selain postback BeMob, kirim SALINAN setiap konversi ke pencatat nilai pemain milik Owner:
+   {url}?t=TOKEN&c=CLICK_ID&e=reg|dep&v=NILAI_USD&x=TXID&s=HOSTNAME  (pakai new Image().src juga).
+   Taruh TOKEN sebagai variabel COLLECT_TOKEN di baris atas dengan nilai "{ltv.token()}".
+   e=reg untuk pendaftaran, e=dep untuk deposit. Kalau pengiriman ini gagal, abaikan (jangan ganggu postback).
+   Domain {host_of(url)} boleh dihubungi khusus untuk ini.""")
 
 
 def _context(record: dict, page_digest: str) -> str:

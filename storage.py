@@ -31,6 +31,18 @@ _db.executescript(
     CREATE TABLE IF NOT EXISTS snapshots (
         ts REAL, day TEXT, total TEXT, campaigns TEXT
     );
+    -- Catatan audit: siapa melakukan apa di dashboard (login, ubah pengaturan, setujui usulan, dll.)
+    CREATE TABLE IF NOT EXISTS audit (
+        ts REAL, who TEXT, role TEXT, ip TEXT, action TEXT, detail TEXT
+    );
+    -- Kejadian pemain dari script di website (pendaftaran & deposit), untuk menghitung nilai pemain / LTV.
+    -- txid unik supaya kejadian yang sama tidak dihitung dua kali walau script mengirim ulang.
+    CREATE TABLE IF NOT EXISTS player_events (
+        ts REAL, click_id TEXT, event TEXT, value REAL,
+        txid TEXT PRIMARY KEY, site TEXT, campaign TEXT, zone TEXT
+    );
+    CREATE INDEX IF NOT EXISTS player_events_click ON player_events (click_id);
+    CREATE INDEX IF NOT EXISTS player_events_ts ON player_events (ts);
     """
 )
 # Kolom `topic` & `task` ditambahkan belakangan; database lama di-upgrade otomatis.
@@ -180,6 +192,38 @@ def log_usage(agent: str, model: str, usage, task: str = "") -> None:
         ),
     )
     _db.commit()
+
+
+# --- catatan audit ---
+def add_audit(who: str, role: str, ip: str, action: str, detail: str = "") -> None:
+    _db.execute("INSERT INTO audit VALUES (?, ?, ?, ?, ?, ?)", (time.time(), who, role, ip, action, detail[:500]))
+    _db.commit()
+
+
+def list_audit(limit: int = 200) -> list[dict]:
+    return [dict(r) for r in _db.execute("SELECT * FROM audit ORDER BY ts DESC LIMIT ?", (limit,))]
+
+
+# --- kejadian pemain (untuk nilai pemain / LTV) ---
+def add_player_event(click_id: str, event: str, value: float, txid: str, site: str = "",
+                     campaign: str = "", zone: str = "") -> bool:
+    """False jika txid sudah pernah tercatat (kiriman dobel)."""
+    cur = _db.execute(
+        "INSERT OR IGNORE INTO player_events (ts, click_id, event, value, txid, site, campaign, zone) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (time.time(), click_id, event, value, txid, site, campaign, zone),
+    )
+    _db.commit()
+    return cur.rowcount == 1
+
+
+def player_events_since(since_ts: float) -> list[dict]:
+    return [dict(r) for r in _db.execute(
+        "SELECT * FROM player_events WHERE ts >= ? ORDER BY ts", (since_ts,))]
+
+
+def player_event_count() -> int:
+    return _db.execute("SELECT COUNT(*) AS c FROM player_events").fetchone()["c"]
 
 
 def usage_rows_since(since_ts: float) -> list[dict]:

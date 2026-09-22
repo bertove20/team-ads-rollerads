@@ -144,8 +144,28 @@ async def ask_ex(agent: Agent, prompt: str, *, schema: dict | None = None, max_t
         return await _ask_ex(agent, prompt, schema, max_tokens, provider, fallback)
 
 
+_budget_cache = {"ts": 0.0, "spent": 0.0}
+
+
+def spent_today(max_age: float = 30) -> float:
+    """Biaya AI hari ini (USD), di-cache beberapa detik supaya tidak menghitung ulang tiap panggilan."""
+    if time.time() - _budget_cache["ts"] > max_age:
+        _budget_cache["spent"] = cost_since(start_of_day_ts())[0]
+        _budget_cache["ts"] = time.time()
+    return _budget_cache["spent"]
+
+
+def budget_exceeded() -> bool:
+    return config.AI_DAILY_BUDGET_USD > 0 and spent_today() >= config.AI_DAILY_BUDGET_USD
+
+
 async def _ask_ex(agent: Agent, prompt: str, schema: dict | None, max_tokens: int,
                   provider: str | None, fallback: bool):
+    if budget_exceeded():
+        # Rem darurat: mencegah biaya membengkak kalau ada error yang memanggil AI berulang-ulang.
+        raise LLMError(f"Batas biaya AI harian ${config.AI_DAILY_BUDGET_USD:.2f} sudah tercapai "
+                       f"(terpakai ${spent_today(0):.2f}). AI berhenti sampai besok. Ubah batasnya di "
+                       "Pengaturan → Batas pengaman, atau lihat pemborosannya di menu Biaya AI.")
     order = chain(agent, provider, fallback)
     if not order:
         wanted = provider_name(provider or config.agent_provider(agent.key))

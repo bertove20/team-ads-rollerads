@@ -7,9 +7,11 @@ import autopause
 import config
 import landing
 import llm
+import ltv
 import meeting
 import memory
 import rollerads
+import scorecard
 import storage
 import tracking
 from agents import AGENTS, LEADER
@@ -53,8 +55,8 @@ def results_text() -> str:
 
 
 def progress_text() -> str:
-    """Status tracking & landing page, supaya tim bisa membahas progresnya."""
-    return "\n\n".join(filter(None, [tracking.status_text(), landing.status_text()]))
+    """Status tracking, landing page, nilai pemain, dan rapor hasil tindakan tim."""
+    return "\n\n".join(filter(None, [tracking.status_text(), landing.status_text(), ltv.text(), scorecard.text(5)]))
 
 
 def open_tasks_text() -> str:
@@ -130,7 +132,8 @@ async def _execute(team: Team, proposal_id: int, action: dict) -> bool:
             log.error("Pause dari usulan #%s gagal: %s", proposal_id, e)
             return False
         return True
-    if action["type"] in ("blacklist_zones", "change_bid", "change_daily_budget"):
+    if action["type"] in ("blacklist_zones", "whitelist_zones", "change_bid", "change_daily_budget",
+                          "set_dayparting", "set_freq_cap"):
         try:
             return await _apply_change(team, proposal_id, action)
         except rollerads.RollerAdsError as e:
@@ -149,6 +152,35 @@ async def _apply_change(team: Team, proposal_id: int, action: dict) -> bool:
         raise rollerads.RollerAdsError(f"campaign '{name}' tidak ditemukan (atau namanya dobel) di RollerAds")
     cid = match[0]["id"]
     who = f"Tim AI (usulan #{proposal_id} disetujui Owner)"
+
+    if kind == "whitelist_zones":
+        done = await rollerads.whitelist_zones(cid, action["zones"])
+        autopause.record({"campaign_id": cid, "title": name, "action": "whitelist",
+                          "reason": f"{len(done)} zone: {', '.join(map(str, done))}", "by": who})
+        await team.send("media_buyer", "approval", f"⭐ Whitelist di {name} (#{cid}): hanya {len(done)} zone ini yang "
+                        f"dapat trafik sekarang — {', '.join(map(str, done))}.\nPantau volumenya: whitelist memangkas "
+                        "trafik, jadi spend bisa turun drastis.")
+        return True
+
+    if kind == "set_dayparting":
+        hours = sorted({int(h) for h in (action.get("hours") or []) if 0 <= int(h) <= 23})
+        after = await rollerads.set_dayparting(cid, hours, timezone=str(config.TIMEZONE))
+        autopause.record({"campaign_id": cid, "title": name, "action": "jam",
+                          "reason": f"{len(hours)} jam/hari: {', '.join(f'{h:02d}' for h in hours)}", "by": who})
+        await team.send("media_buyer", "approval", f"🕒 Jam tayang {name} (#{cid}) diatur: hanya jam "
+                        + ", ".join(f"{h:02d}" for h in hours) + f" waktu {config.TIMEZONE}. "
+                        f"Targeting lain tetap utuh (moderasi: {after.get('campaign_moderation', '-')}).")
+        return True
+
+    if kind == "set_freq_cap":
+        count = int(action["new_value"])
+        period = int((action.get("hours") or [24])[0]) or 24
+        await rollerads.set_freq_cap(cid, count, period)
+        autopause.record({"campaign_id": cid, "title": name, "action": "frekuensi",
+                          "reason": f"maks {count}x / {period} jam", "by": who})
+        await team.send("media_buyer", "approval", f"🔁 Frequency cap {name} (#{cid}): satu orang maksimal melihat "
+                        f"iklan {count}x per {period} jam. Mengurangi tayangan sia-sia ke orang yang sama.")
+        return True
 
     if kind == "blacklist_zones":
         done = await rollerads.blacklist_zones(cid, action["zones"])
@@ -283,7 +315,8 @@ async def daily_report() -> str:
         "Tulis laporan harian untuk Owner dengan urutan: (1) HASIL AKHIR KEMARIN: total profit/ROI dan campaign "
         "terbaik & terburuk, (2) dibanding tren 7 hari: membaik atau memburuk, (3) tindakan yang sudah dijalankan "
         "tim dan dampaknya jika terlihat, (4) risiko, (5) rencana hari ini, (6) progres tracking/landing page "
-        "(yang belum terpasang, belum terhubung, atau menunggu di-upload Owner), (7) hal yang perlu keputusan "
+        "(yang belum terpasang, belum terhubung, atau menunggu di-upload Owner), (7) rapor tindakan tim: mana "
+        "yang berhasil/gagal dan pelajarannya, (8) hal yang perlu keputusan "
         "atau tindakan Owner (usulan menunggu, script untuk ditempel, tugas manual). Data 'hari ini' baru "
         "sebagian hari, jangan dijadikan kesimpulan.",
         task="laporan",

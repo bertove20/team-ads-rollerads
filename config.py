@@ -110,6 +110,19 @@ MAX_CAMPAIGN_DAILY_BUDGET_USD = _float("MAX_CAMPAIGN_DAILY_BUDGET_USD", 50)
 ZONE_WASTE_USD = _float("ZONE_WASTE_USD", 3)
 ZONE_MIN_ROI_PCT = _float("ZONE_MIN_ROI_PCT", -50)
 ZONE_GOOD_ROI_PCT = _float("ZONE_GOOD_ROI_PCT", 30)
+# Rem darurat biaya AI: jika biaya AI hari ini melewati batas, semua pemanggilan AI berhenti sampai besok.
+AI_DAILY_BUDGET_USD = _float("AI_DAILY_BUDGET_USD", 5)
+
+# Pengawas otomatis (tanpa AI): saldo, moderasi campaign, selisih konversi
+MIN_BALANCE_USD = _float("MIN_BALANCE_USD", 20)          # saldo RollerAds di bawah ini -> alert
+CONV_DIFF_ALERT_PCT = _float("CONV_DIFF_ALERT_PCT", 30)  # selisih konversi BeMob vs RollerAds -> alert
+
+# Auto-scale: campaign yang untung diusulkan dinaikkan budget/bid-nya (tetap butuh persetujuan Owner)
+AUTOSCALE_ENABLED = _str("AUTOSCALE_ENABLED", "1") == "1"
+AUTOSCALE_MIN_CONVERSIONS = _int("AUTOSCALE_MIN_CONVERSIONS", 3)   # minimal konversi 24 jam terakhir
+AUTOSCALE_MIN_ROI_PCT = _float("AUTOSCALE_MIN_ROI_PCT", 30)        # ROI minimal agar layak di-scale
+AUTOSCALE_STEP_PCT = _float("AUTOSCALE_STEP_PCT", 20)              # kenaikan budget/bid per usulan
+AUTOSCALE_COOLDOWN_HOURS = _float("AUTOSCALE_COOLDOWN_HOURS", 24)  # jeda antar usulan untuk campaign yang sama
 
 # Script tracking website (dibuat Developer, dicek QA saat campaign dibuat)
 BEMOB_POSTBACK_URL = _str("BEMOB_POSTBACK_URL")  # mis. https://xxxxx.bemobtrcks.com/postback
@@ -139,8 +152,10 @@ TASK_REMIND_HOURS = _float("TASK_REMIND_HOURS", 3)
 DASHBOARD_HOST = _str("DASHBOARD_HOST", "127.0.0.1")
 DASHBOARD_PORT = _int("DASHBOARD_PORT", 8090)  # 8080 sering dipakai Laragon/nginx
 DASHBOARD_PASSWORD = _str("DASHBOARD_PASSWORD")
+# Password kedua (opsional) untuk akun "hanya melihat": bisa membaca semua data, tidak bisa mengubah apa pun.
+DASHBOARD_VIEWER_PASSWORD = _str("DASHBOARD_VIEWER_PASSWORD")
 # Domain publik dashboard di VPS (mis. ads.domain-anda.com), dilayani HTTPS oleh Caddy di depan program.
-DASHBOARD_DOMAIN = _str("DASHBOARD_DOMAIN").lower().removeprefix("https://").removeprefix("http://").strip("/")
+DASHBOARD_DOMAIN =_str("DASHBOARD_DOMAIN").lower().removeprefix("https://").removeprefix("http://").strip("/")
 
 # Topic di grup Telegram: key -> nama yang tampil
 TOPICS = {

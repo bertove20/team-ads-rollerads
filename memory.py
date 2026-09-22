@@ -154,7 +154,8 @@ def impact_text(max_age_days: int = 14) -> str:
 
 def context() -> str:
     """Semua ingatan untuk disisipkan ke prompt agent."""
-    return "\n\n".join(filter(None, [notes_text(), decisions_text(), impact_text()]))
+    import scorecard  # di sini supaya tidak saling impor saat program dimulai
+    return "\n\n".join(filter(None, [notes_text(), decisions_text(), impact_text(), scorecard.text()]))
 
 
 # ---------------------------------------------------------------- merangkum otomatis

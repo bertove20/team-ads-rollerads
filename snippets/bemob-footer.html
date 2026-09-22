@@ -9,6 +9,9 @@
   var BAGIAN_DEPOSIT = 1;       // 1 = seluruh deposit dihitung pendapatan; 0.3 = 30%
   var HARI_SIMPAN = 30;         // click_id disimpan berapa hari
   var DEBUG = false;            // true = tampilkan log di Console browser
+  // Pencatat nilai pemain (LTV) milik Owner sendiri. Kosongkan jika dashboard belum punya domain.
+  var COLLECT_URL = '';         // alamat dashboard Owner + /collect (lihat dashboard: Nilai Pemain)
+  var COLLECT_TOKEN = '';       // token dari dashboard -> Nilai Pemain
 
   // ---------- Penyimpanan click_id ----------
   var KEY = 'bm_cid', KEY_TS = 'bm_cid_ts', KEY_SENT = 'bm_sent';
@@ -43,6 +46,19 @@
 
   // ---------- Kirim postback (anti-dobel) ----------
   function sentList() { try { return JSON.parse(load(KEY_SENT) || '[]'); } catch (e) { return []; } }
+  // Kirim salinan kejadian ke dashboard Owner (untuk hitung nilai pemain / LTV). Gagal = diabaikan.
+  function kirimKeDashboard(txid, payout) {
+    if (!COLLECT_URL || !COLLECT_TOKEN) return;
+    try {
+      new Image().src = COLLECT_URL + '?t=' + encodeURIComponent(COLLECT_TOKEN) +
+        '&c=' + encodeURIComponent(cid) +
+        '&e=' + (txid.indexOf('REG-') === 0 ? 'reg' : 'dep') +
+        '&v=' + encodeURIComponent(payout.toFixed(2)) +
+        '&x=' + encodeURIComponent(txid) +
+        '&s=' + encodeURIComponent(location.hostname);
+    } catch (e) {}
+  }
+
   function send(txid, payout) {
     var list = sentList();
     if (list.indexOf(txid) !== -1) return;
@@ -50,6 +66,7 @@
       '&payout=' + encodeURIComponent(payout.toFixed(2)) +
       '&txid=' + encodeURIComponent(txid);
     new Image().src = url;
+    kirimKeDashboard(txid, payout);
     list.push(txid);
     save(KEY_SENT, JSON.stringify(list.slice(-50)));
     log('postback terkirim', url);

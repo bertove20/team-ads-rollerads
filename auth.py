@@ -77,26 +77,41 @@ def _sessions() -> dict[str, dict]:
             if now - s["last"] < IDLE_SECONDS and now - s["created"] < MAX_AGE_SECONDS}
 
 
-def create_session(ip: str, agent: str) -> str:
+def create_session(ip: str, agent: str, role: str = "owner") -> str:
     token = secrets.token_urlsafe(32)
     data = _sessions()
-    data[_key(token)] = {"created": time.time(), "last": time.time(), "ip": ip, "agent": agent[:160]}
+    data[_key(token)] = {"created": time.time(), "last": time.time(), "ip": ip, "agent": agent[:160], "role": role}
     storage.put(SESSIONS_KEY, data)
     return token
 
 
-def check_session(token: str | None) -> bool:
-    """Sesi masih berlaku? Sekaligus memperpanjang waktu idle (dicatat maks tiap 5 menit)."""
+def session_role(token: str | None) -> str | None:
+    """Peran sesi: "owner" (bisa mengubah) atau "viewer" (hanya melihat). None = tidak berlaku.
+    Sekaligus memperpanjang waktu idle (dicatat maks tiap 5 menit)."""
     if not token:
-        return False
+        return None
     data = _sessions()
     session = data.get(_key(token))
     if not session:
-        return False
+        return None
     if time.time() - session["last"] > 300:
         session["last"] = time.time()
         storage.put(SESSIONS_KEY, data)
-    return True
+    return session.get("role", "owner")
+
+
+def check_session(token: str | None) -> bool:
+    return session_role(token) is not None
+
+
+def role_of_password(password: str) -> str | None:
+    """Password Owner atau password lihat-saja? None jika salah."""
+    if verify_password(password):
+        return "owner"
+    viewer = config.DASHBOARD_VIEWER_PASSWORD
+    if viewer and verify_password(password, viewer):
+        return "viewer"
+    return None
 
 
 def end_session(token: str | None) -> None:
@@ -116,4 +131,5 @@ def end_all_sessions(keep: str | None = None) -> int:
 def session_list(current: str | None) -> list[dict]:
     mine = _key(current) if current else ""
     return sorted(({"created": s["created"], "last": s["last"], "ip": s["ip"], "agent": s["agent"],
-                    "current": k == mine} for k, s in _sessions().items()), key=lambda s: -s["last"])
+                    "role": s.get("role", "owner"), "current": k == mine} for k, s in _sessions().items()),
+                  key=lambda s: -s["last"])
