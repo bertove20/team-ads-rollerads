@@ -67,8 +67,8 @@ def local_time(ts: float) -> dt.datetime:
 def setup_status(team: Team) -> list[dict]:
     """Checklist pemasangan agar Owner tahu apa yang masih kurang."""
     return [
-        {"ok": api_key_ok(), "label": "API key AI (Claude / OpenAI / Gemini / DeepSeek)",
-         "hint": "Menu Pengaturan → Claude AI atau Penyedia AI lain → isi API key, lalu klik Tes."},
+        {"ok": api_key_ok(), "label": "API key AI (Claude / OpenRouter / OpenAI / Gemini / DeepSeek)",
+         "hint": "Menu Pengaturan → Claude AI atau Penyedia AI (mis. OpenRouter) → isi API key, lalu klik Tes."},
         {"ok": bool(os.getenv("BOT_TOKEN_HEAD_MARKETING", "").strip()), "label": "Bot Telegram Head of Marketing",
          "hint": "Buat bot di @BotFather, lalu isi tokennya di menu Pengaturan → Telegram. Tanpa ini hanya dashboard yang jalan."},
         {"ok": bool(config.GROUP_ID), "label": "ID grup Telegram",
@@ -702,7 +702,7 @@ async def _test_ai(v: dict) -> list[dict]:
         if claude[0]["ok"]:
             ready.add("claude")
     async with httpx.AsyncClient(timeout=60) as http:
-        for p in ("openai", "gemini", "deepseek"):
+        for p in ("openai", "gemini", "deepseek", "openrouter"):
             info = llm.PROVIDERS[p]
             key = v.get(info["key"], "")
             if settings.is_placeholder(key):
@@ -733,7 +733,9 @@ async def _test_ai(v: dict) -> list[dict]:
         chosen = (v.get(f"AI_{key.upper()}") or "claude").lower()
         backups = [llm.provider_name(p) for p in fallback if p != chosen and p in ready]
         if chosen in ready:
-            text = f"{name} ({task}) memakai {llm.provider_name(chosen)}"
+            model = (v.get(f"MODEL_{key.upper()}") or v.get("OPENROUTER_MODEL") or config.OPENROUTER_MODEL) \
+                if chosen == "openrouter" else ""
+            text = f"{name} ({task}) memakai {llm.provider_name(chosen)}" + (f" · {model}" if model else "")
             out.append({"ok": True, "text": text + (f", cadangan: {', '.join(backups)}." if backups else ", tanpa cadangan.")})
         else:
             out.append({"ok": False, "text": f"{name} memilih {llm.provider_name(chosen)} tetapi API key-nya belum siap"
@@ -940,22 +942,37 @@ def _token(request: web.Request) -> str | None:
     return request.cookies.get(auth.COOKIE)
 
 
+def _via_proxy(request: web.Request) -> bool:
+    """Datang lewat reverse proxy (Caddy di VPS)? Proxy selalu menambahkan X-Forwarded-For."""
+    return (request.remote or "") in ("127.0.0.1", "::1") and "X-Forwarded-For" in request.headers
+
+
+def _client_ip(request: web.Request) -> str:
+    """IP asli pengunjung. Di balik Caddy semua koneksi datang dari 127.0.0.1, jadi dipakai IP terakhir yang
+    ditambahkan Caddy di X-Forwarded-For (bagian kiri bisa dipalsukan pengunjung, jadi tidak dipakai)."""
+    if _via_proxy(request) and config.DASHBOARD_DOMAIN:
+        return request.headers["X-Forwarded-For"].split(",")[-1].strip() or "?"
+    return request.remote or "?"
+
+
 def _is_local_client(request: web.Request) -> bool:
-    return (request.remote or "") in ("127.0.0.1", "::1")
+    """Benar-benar dari komputer tempat program berjalan (bukan pengunjung internet lewat proxy)."""
+    return (request.remote or "") in ("127.0.0.1", "::1") and not any(
+        h in request.headers for h in ("X-Forwarded-For", "X-Real-IP", "Forwarded"))
 
 
 def _host_allowed(request: web.Request) -> bool:
-    """Dashboard lokal hanya melayani alamat lokal: menangkal DNS rebinding (situs jahat yang menyamar sebagai
-    localhost untuk membaca/mengubah dashboard lewat browser Anda)."""
+    """Dashboard lokal hanya melayani alamat lokal (+ domain VPS jika diisi): menangkal DNS rebinding (situs jahat
+    yang menyamar sebagai localhost untuk membaca/mengubah dashboard lewat browser Anda)."""
     if config.DASHBOARD_HOST not in LOCAL_HOSTS:
         return True  # dibuka ke jaringan: password wajib, jadi tetap terlindungi
     host = request.host.rsplit(":", 1)[0].strip("[]").lower() if not request.host.startswith("[") \
         else request.host[1:].split("]")[0]
-    return host in LOCAL_HOSTS
+    return host in LOCAL_HOSTS or (bool(config.DASHBOARD_DOMAIN) and host == config.DASHBOARD_DOMAIN)
 
 
 def _locked_out(request: web.Request) -> web.Response | None:
-    ip, now = request.remote or "?", time.time()
+    ip, now = _client_ip(request), time.time()
     if _locked.get(ip, 0) > now:
         return web.json_response({"error": f"Terlalu banyak percobaan login salah. Coba lagi dalam "
                                            f"{int((_locked[ip] - now) / 60) + 1} menit."}, status=429)
@@ -963,7 +980,7 @@ def _locked_out(request: web.Request) -> web.Response | None:
 
 
 async def _login_failed(request: web.Request) -> None:
-    ip, now = request.remote or "?", time.time()
+    ip, now = _client_ip(request), time.time()
     _fails[ip] = [t for t in _fails[ip] if now - t < FAIL_WINDOW] + [now]
     log.warning("Login dashboard salah dari %s (%d kali)", ip, len(_fails[ip]))
     if len(_fails[ip]) >= MAX_FAILS:
@@ -978,8 +995,8 @@ async def _login_failed(request: web.Request) -> None:
 
 
 def _start_session(request: web.Request, response: web.Response) -> None:
-    token = auth.create_session(request.remote or "?", request.headers.get("User-Agent", ""))
-    https = request.secure or request.headers.get("X-Forwarded-Proto", "") == "https"
+    token = auth.create_session(_client_ip(request), request.headers.get("User-Agent", ""))
+    https = request.secure or (_via_proxy(request) and request.headers.get("X-Forwarded-Proto", "") == "https")
     response.set_cookie(auth.COOKIE, token, max_age=auth.MAX_AGE_SECONDS, httponly=True, samesite="Strict",
                         secure=https, path="/")
 
@@ -1033,7 +1050,7 @@ async def auth_setup(request: web.Request) -> web.Response:
         return web.json_response({"error": problem}, status=400)
     settings.save({"DASHBOARD_PASSWORD": password})  # disimpan sebagai hash
     config.DASHBOARD_PASSWORD = settings.current().get("DASHBOARD_PASSWORD", "")
-    log.warning("Password dashboard dibuat dari %s", request.remote)
+    log.warning("Password dashboard dibuat dari %s", _client_ip(request))
     response = web.json_response({"ok": True})
     _start_session(request, response)
     return response
@@ -1050,14 +1067,14 @@ async def login(request: web.Request) -> web.Response:
     if not auth.verify_password(password):
         await _login_failed(request)
         return web.json_response({"error": "Password salah."}, status=401)
-    _fails.pop(request.remote or "?", None)
+    _fails.pop(_client_ip(request), None)
     if not auth.is_hashed(config.DASHBOARD_PASSWORD):  # password lama (teks biasa) -> simpan sebagai hash
         try:
             settings.save({"DASHBOARD_PASSWORD": auth.hash_password(password)})
             config.DASHBOARD_PASSWORD = settings.current().get("DASHBOARD_PASSWORD", config.DASHBOARD_PASSWORD)
         except settings.SettingsError:
             log.exception("Password lama tidak bisa diubah menjadi hash")
-    log.info("Login dashboard dari %s", request.remote)
+    log.info("Login dashboard dari %s", _client_ip(request))
     response = web.json_response({"ok": True})
     _start_session(request, response)
     return response

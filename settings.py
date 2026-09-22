@@ -34,6 +34,7 @@ PROVIDER_OPTIONS = [
     {"value": "openai", "label": "OpenAI (ChatGPT)"},
     {"value": "gemini", "label": "Gemini (Google)"},
     {"value": "deepseek", "label": "DeepSeek"},
+    {"value": "openrouter", "label": "OpenRouter (satu key, model dipilih per agent)"},
 ]
 PROVIDERS = {o["value"] for o in PROVIDER_OPTIONS}
 
@@ -78,13 +79,24 @@ SCHEMA = [
             _f("GEMINI_MODEL", "Model Gemini", "text", "Mis. gemini-2.5-pro.", default="gemini-2.5-pro"),
             _f("DEEPSEEK_API_KEY", "API key DeepSeek", "secret", "platform.deepseek.com → API keys."),
             _f("DEEPSEEK_MODEL", "Model DeepSeek", "text", "Mis. deepseek-chat.", default="deepseek-chat"),
+            _f("OPENROUTER_API_KEY", "API key OpenRouter", "secret",
+               "openrouter.ai/settings/keys. Diawali sk-or-v1-. Pakai API key biasa, BUKAN management key."),
+            _f("OPENROUTER_MODEL", "Model OpenRouter (default)", "text",
+               "Dipakai agent yang tidak punya model khusus. Daftar & harga: openrouter.ai/models.",
+               default="anthropic/claude-sonnet-5"),
+            _f("OPENROUTER_FALLBACK_MODELS", "Model cadangan OpenRouter", "text",
+               "Dicoba otomatis oleh OpenRouter jika model agent gagal/penuh, pisahkan koma.",
+               default="anthropic/claude-sonnet-5,openai/gpt-5.6-sol,google/gemini-3.5-flash"),
             *[_f(f"AI_{key.upper()}", f"AI untuk {name}", "select", f"Tugas: {task}.", PROVIDER_OPTIONS,
                default="claude")
               for key, name, task in AGENT_ROLES],
+            *[_f(f"MODEL_{key.upper()}", f"Model OpenRouter untuk {name}", "text",
+               "Hanya dipakai jika AI-nya OpenRouter. Kosong = model default OpenRouter.")
+              for key, name, _ in AGENT_ROLES],
             _f("AI_FALLBACK", "Urutan AI cadangan", "text",
-               "Dicoba berurutan jika AI utama gagal, pisahkan koma, mis. claude,openai,gemini,deepseek. "
+               "Dicoba berurutan jika AI utama gagal, pisahkan koma, mis. openrouter,claude,openai,gemini,deepseek. "
                "Hanya AI yang API key-nya terisi yang dipakai. Kosongkan jika tidak ingin cadangan.",
-               default="claude,openai,gemini,deepseek"),
+               default="claude,openrouter,openai,gemini,deepseek"),
         ],
     },
     {
@@ -214,6 +226,8 @@ SCHEMA = [
                 {"value": "0.0.0.0", "label": "Semua perangkat di jaringan / internet (VPS). WAJIB password"},
             ]),
             _f("DASHBOARD_PORT", "Port dashboard", "number", "Default 8090. Jangan pakai port yang sudah dipakai program lain (Laragon memakai 80/8080)."),
+            _f("DASHBOARD_DOMAIN", "Domain dashboard di VPS", "text",
+               "Mis. ads.domain-anda.com (tanpa https://). Diisi otomatis oleh script instalasi VPS. Kosongkan di laptop."),
             _f("TIMEZONE", "Zona waktu", "select", "", [
                 {"value": "Asia/Jakarta", "label": "WIB (Asia/Jakarta)"},
                 {"value": "Asia/Makassar", "label": "WITA (Asia/Makassar)"},
@@ -329,6 +343,11 @@ def _normalize(key: str, raw) -> str:
             raise SettingsError(f"Urutan AI cadangan: '{', '.join(unknown)}' tidak dikenal. "
                                 f"Pilihan: {', '.join(sorted(PROVIDERS))}")
         return ",".join(dict.fromkeys(items))
+    if key == "DASHBOARD_DOMAIN" and value:
+        value = value.lower().removeprefix("https://").removeprefix("http://").strip("/")
+        if not re.fullmatch(r"[a-z0-9-]+(\.[a-z0-9-]+)+", value):
+            raise SettingsError("Domain dashboard harus seperti ads.domain-anda.com")
+        return value
     if key == "BEMOB_POSTBACK_URL" and value:
         if not value.startswith("https://") or "/postback" not in value:
             raise SettingsError("URL postback BeMob harus seperti https://xxxxx.bemobtrcks.com/postback")

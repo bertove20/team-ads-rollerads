@@ -48,14 +48,26 @@ GEMINI_API_KEY = _str("GEMINI_API_KEY")
 GEMINI_MODEL = _str("GEMINI_MODEL", "gemini-2.5-pro")
 DEEPSEEK_API_KEY = _str("DEEPSEEK_API_KEY")
 DEEPSEEK_MODEL = _str("DEEPSEEK_MODEL", "deepseek-chat")
+# OpenRouter: satu API key untuk banyak model (Claude, GPT, Gemini, DeepSeek, ...). Model bisa dipilih per agent
+# lewat MODEL_<KEY AGENT>, mis. MODEL_QA=openai/gpt-5.6-terra. Jika model itu gagal, OpenRouter otomatis mencoba
+# OPENROUTER_FALLBACK_MODELS berurutan.
+OPENROUTER_API_KEY = _str("OPENROUTER_API_KEY")
+OPENROUTER_MODEL = _str("OPENROUTER_MODEL", "anthropic/claude-sonnet-5")
+OPENROUTER_FALLBACK_MODELS = _list("OPENROUTER_FALLBACK_MODELS") if os.getenv("OPENROUTER_FALLBACK_MODELS") is not None \
+    else ["anthropic/claude-sonnet-5", "openai/gpt-5.6-sol", "google/gemini-3.5-flash"]
 # Urutan AI cadangan jika AI utama agent gagal (kosong = tanpa cadangan)
 AI_FALLBACK = [p.lower() for p in _list("AI_FALLBACK")] if os.getenv("AI_FALLBACK") is not None \
-    else ["claude", "openai", "gemini", "deepseek"]
+    else ["claude", "openrouter", "openai", "gemini", "deepseek"]
 
 
 def agent_provider(agent_key: str) -> str:
     """AI yang dipakai agent, mis. AI_DEVELOPER=claude. Default Claude."""
     return _str(f"AI_{agent_key.upper()}", "claude").lower()
+
+
+def agent_model(agent_key: str) -> str:
+    """Model OpenRouter khusus agent (MODEL_<KEY>), kosong = OPENROUTER_MODEL."""
+    return _str(f"MODEL_{agent_key.upper()}")
 
 # Telegram
 GROUP_ID = _int("TELEGRAM_GROUP_ID", 0)
@@ -127,6 +139,8 @@ TASK_REMIND_HOURS = _float("TASK_REMIND_HOURS", 3)
 DASHBOARD_HOST = _str("DASHBOARD_HOST", "127.0.0.1")
 DASHBOARD_PORT = _int("DASHBOARD_PORT", 8090)  # 8080 sering dipakai Laragon/nginx
 DASHBOARD_PASSWORD = _str("DASHBOARD_PASSWORD")
+# Domain publik dashboard di VPS (mis. ads.domain-anda.com), dilayani HTTPS oleh Caddy di depan program.
+DASHBOARD_DOMAIN = _str("DASHBOARD_DOMAIN").lower().removeprefix("https://").removeprefix("http://").strip("/")
 
 # Topic di grup Telegram: key -> nama yang tampil
 TOPICS = {

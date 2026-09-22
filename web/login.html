@@ -99,7 +99,7 @@ async function post(path, body) {
       $("#note").hidden = false;
       $("#note").textContent = s.can_setup
         ? "Minimal 10 karakter, campur huruf, angka, dan simbol. Contoh pola: tiga kata acak + angka. Simpan di tempat aman; password disimpan sebagai hash sehingga tidak bisa dilihat lagi."
-        : "Password pertama hanya bisa dibuat dari komputer tempat program berjalan.";
+        : "Password pertama hanya bisa dibuat dari komputer tempat program berjalan. Di VPS, jalankan di terminal: sudo ai-ads-password";
       if (!s.can_setup) $("#submit").disabled = true;
     }
   } catch (e) { showError("Dashboard tidak bisa dihubungi. Pastikan program masih berjalan."); }

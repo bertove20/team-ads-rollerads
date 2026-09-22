@@ -1,0 +1,35 @@
+# Service systemd: program jalan 24 jam, otomatis hidup lagi jika error / VPS reboot.
+# Dipasang oleh deploy/install.sh (__APP_DIR__ dan __APP_USER__ diganti otomatis).
+[Unit]
+Description=Tim AI Ads (Telegram + dashboard)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__APP_USER__
+Group=__APP_USER__
+WorkingDirectory=__APP_DIR__
+ExecStart=__APP_DIR__/.venv/bin/python main.py
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONIOENCODING=utf-8
+# Tombol "Jalankan ulang" di dashboard: program keluar, systemd menyalakannya lagi.
+Environment=AIADS_LAUNCHER=systemd
+Restart=always
+RestartSec=5
+
+# Pengamanan: kode program hanya-baca bagi service; yang boleh ditulis hanya data/ dan .env.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=__APP_DIR__/data __APP_DIR__/.env
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

@@ -7,6 +7,7 @@ import datetime as dt
 import json
 import logging
 import re
+import time
 from types import SimpleNamespace
 
 import anthropic
@@ -44,7 +45,10 @@ PROVIDERS = {
                "base": "https://generativelanguage.googleapis.com/v1beta/openai", "json_schema": True},
     "deepseek": {"name": "DeepSeek", "key": "DEEPSEEK_API_KEY", "model": "DEEPSEEK_MODEL",
                  "base": "https://api.deepseek.com/v1", "json_schema": False, "max_tokens": 8192},
+    "openrouter": {"name": "OpenRouter", "key": "OPENROUTER_API_KEY", "model": "OPENROUTER_MODEL",
+                   "base": "https://openrouter.ai/api/v1", "json_schema": True},
 }
+OPENROUTER_PRICES_KEY = "openrouter_prices"  # model -> [harga input, output] per 1 juta token, dari OpenRouter
 
 # Harga per 1 juta token (USD) untuk estimasi biaya: (input, output). Model lain dihitung $5 / $25.
 PRICES = {
@@ -65,7 +69,9 @@ def provider_name(provider: str) -> str:
     return PROVIDERS.get(provider, {}).get("name", provider)
 
 
-def provider_model(provider: str) -> str:
+def provider_model(provider: str, agent: Agent | None = None) -> str:
+    if provider == "openrouter" and agent and config.agent_model(agent.key):
+        return config.agent_model(agent.key)
     return getattr(config, PROVIDERS[provider]["model"])
 
 
@@ -88,8 +94,11 @@ def chain(agent: Agent, provider: str | None = None, fallback: bool = True) -> l
 
 
 def label(agent: Agent, provider: str | None = None) -> str:
-    """Mis. "Developer (Claude)"."""
-    return f"{agent.name} ({provider_name(provider or config.agent_provider(agent.key))})"
+    """Mis. "Developer (Claude)" atau "QA (OpenRouter · gpt-5.6-terra)"."""
+    provider = provider or config.agent_provider(agent.key)
+    if provider == "openrouter":
+        return f"{agent.name} (OpenRouter · {provider_model(provider, agent).split('/')[-1]})"
+    return f"{agent.name} ({provider_name(provider)})"
 
 
 async def ask(agent: Agent, prompt: str, *, schema: dict | None = None, max_tokens: int = 16000,
@@ -171,13 +180,21 @@ async def _ask_claude(agent: Agent, prompt: str, schema: dict | None, max_tokens
 
 async def _ask_openai_style(provider: str, agent: Agent, prompt: str, schema: dict | None, max_tokens: int):
     info = PROVIDERS[provider]
-    name, model = info["name"], provider_model(provider)
+    name, model = info["name"], provider_model(provider, agent)
     user = prompt
     body: dict = {"model": model}
     if provider == "openai":
         body["max_completion_tokens"] = max_tokens
     else:
         body["max_tokens"] = min(max_tokens, info.get("max_tokens", max_tokens))
+    if provider == "openrouter":
+        # Model cadangan dicoba otomatis oleh OpenRouter jika model utama gagal/penuh.
+        backups = [m for m in config.OPENROUTER_FALLBACK_MODELS if m != model][:2]
+        if backups:
+            body["models"] = [model] + backups
+        body["usage"] = {"include": True}
+        if schema:  # hanya ke server yang benar-benar mendukung format JSON yang diminta
+            body["provider"] = {"require_parameters": True}
     if schema and info["json_schema"]:
         body["response_format"] = {"type": "json_schema",
                                    "json_schema": {"name": "jawaban", "schema": schema, "strict": True}}
@@ -208,6 +225,8 @@ async def _ask_openai_style(provider: str, agent: Agent, prompt: str, schema: di
         raise LLMError(f"{name} error {r.status_code}: {message}")
 
     usage = data.get("usage") or {}
+    if provider == "openrouter":
+        await _remember_price(data.get("model") or model)
     cached = (usage.get("prompt_tokens_details") or {}).get("cached_tokens") or 0
     storage.log_usage(agent.key, data.get("model") or model, SimpleNamespace(
         input_tokens=max((usage.get("prompt_tokens") or 0) - cached, 0),
@@ -241,9 +260,40 @@ def _parse(text: str) -> dict:
     raise LLMError("Jawaban terstruktur dari model tidak valid.")
 
 
+async def _remember_price(model: str) -> None:
+    """Simpan harga asli model OpenRouter (dari daftar model publik) untuk estimasi biaya. Diperbarui tiap hari."""
+    prices = storage.get(OPENROUTER_PRICES_KEY, {})
+    if model in prices and prices.get("_ts", 0) > time.time() - 86400:
+        return
+    try:
+        async with httpx.AsyncClient(timeout=30) as http:
+            items = (await http.get(f"{PROVIDERS['openrouter']['base']}/models")).json().get("data", [])
+    except (httpx.HTTPError, ValueError) as e:
+        log.warning("Harga model OpenRouter tidak bisa diambil: %s", e)
+        return
+    prices = {"_ts": time.time()}
+    for m in items:
+        p = m.get("pricing") or {}
+        try:
+            prices[m["id"]] = [float(p.get("prompt") or 0) * 1e6, float(p.get("completion") or 0) * 1e6]
+        except (TypeError, ValueError, KeyError):
+            continue
+    storage.put(OPENROUTER_PRICES_KEY, prices)
+
+
+def _price(model: str) -> tuple[float, float]:
+    if model in PRICES:
+        return PRICES[model]
+    known = storage.get(OPENROUTER_PRICES_KEY, {})
+    if model in known:
+        return tuple(known[model])
+    base = next((known[k] for k in known if k != "_ts" and model.startswith(k)), None)  # mis. model bertanggal
+    return tuple(base) if base else (5.0, 25.0)
+
+
 def row_cost(row: dict) -> float:
     """Estimasi biaya (USD) satu baris pemakaian token."""
-    price_in, price_out = PRICES.get(row["model"], (5.0, 25.0))
+    price_in, price_out = _price(row["model"])
     return (
         row["input_tokens"] * price_in
         + row["cache_write"] * price_in * 1.25

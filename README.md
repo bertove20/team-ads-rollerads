@@ -103,6 +103,10 @@ dan `TRACK_DEPOSIT_SHARE` di Pengaturan → 🔌 Script tracking website. Di Tel
 
 ## Langkah pemasangan
 
+> **Mau jalan 24 jam di VPS Ubuntu?** Ikuti **[README-VPS.md](README-VPS.md)**: cukup satu perintah instalasi,
+> dengan HTTPS otomatis, service yang hidup lagi sendiri, firewall, dan backup harian.
+> Langkah di bawah ini untuk menjalankan di laptop/PC Windows.
+
 ### 1. Pasang Python
 Unduh Python 3.12 dari https://www.python.org/downloads/ dan **centang "Add python.exe to PATH"**
 saat instalasi.
