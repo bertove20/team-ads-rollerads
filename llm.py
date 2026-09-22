@@ -3,6 +3,8 @@
 Tiap agent memakai AI pilihan Owner (AI_<KEY AGENT> di .env). Jika AI itu gagal (key kosong, saldo habis,
 error, jawaban tidak valid), permintaan otomatis diteruskan ke AI berikutnya di AI_FALLBACK.
 """
+import contextlib
+import contextvars
 import datetime as dt
 import json
 import logging
@@ -65,6 +67,31 @@ class LLMError(Exception):
     pass
 
 
+# Jenis pekerjaan yang sedang dikerjakan, ikut dicatat di riwayat pemakaian token (halaman Biaya AI).
+_task: contextvars.ContextVar[str] = contextvars.ContextVar("ai_task", default="lainnya")
+TASKS = {
+    "rapat": "Rapat tim",
+    "laporan": "Laporan & ringkasan",
+    "tanya": "Tanya tim (Owner bertanya)",
+    "campaign": "Menyusun campaign",
+    "kreatif": "Ide kreatif iklan",
+    "script": "Script tracking website",
+    "landing": "Landing page",
+    "ingatan": "Merawat ingatan tim",
+    "lainnya": "Lainnya",
+}
+
+
+@contextlib.contextmanager
+def task_scope(name: str):
+    """Tandai semua pemanggilan AI di dalam blok ini sebagai pekerjaan `name`, mis. with llm.task_scope("script"):"""
+    token = _task.set(name or _task.get())
+    try:
+        yield
+    finally:
+        _task.reset(token)
+
+
 def provider_name(provider: str) -> str:
     return PROVIDERS.get(provider, {}).get("name", provider)
 
@@ -102,16 +129,23 @@ def label(agent: Agent, provider: str | None = None) -> str:
 
 
 async def ask(agent: Agent, prompt: str, *, schema: dict | None = None, max_tokens: int = 16000,
-              provider: str | None = None, fallback: bool = True):
-    """Kirim prompt sebagai `agent`. Mengembalikan teks, atau dict jika `schema` diberikan."""
+              provider: str | None = None, fallback: bool = True, task: str = ""):
+    """Kirim prompt sebagai `agent`. Mengembalikan teks, atau dict jika `schema` diberikan.
+    `task` = jenis pekerjaan (lihat TASKS) untuk laporan pemakaian token."""
     result, _ = await ask_ex(agent, prompt, schema=schema, max_tokens=max_tokens, provider=provider,
-                             fallback=fallback)
+                             fallback=fallback, task=task)
     return result
 
 
 async def ask_ex(agent: Agent, prompt: str, *, schema: dict | None = None, max_tokens: int = 16000,
-                 provider: str | None = None, fallback: bool = True):
+                 provider: str | None = None, fallback: bool = True, task: str = ""):
     """Seperti ask(), tetapi juga mengembalikan AI yang akhirnya menjawab: (hasil, provider)."""
+    with task_scope(task):
+        return await _ask_ex(agent, prompt, schema, max_tokens, provider, fallback)
+
+
+async def _ask_ex(agent: Agent, prompt: str, schema: dict | None, max_tokens: int,
+                  provider: str | None, fallback: bool):
     order = chain(agent, provider, fallback)
     if not order:
         wanted = provider_name(provider or config.agent_provider(agent.key))
@@ -168,7 +202,7 @@ async def _ask_claude(agent: Agent, prompt: str, schema: dict | None, max_tokens
     except anthropic.APIConnectionError as e:
         raise LLMError("Tidak bisa terhubung ke Claude API. Cek koneksi internet.") from e
 
-    storage.log_usage(agent.key, response.model, response.usage)
+    storage.log_usage(agent.key, response.model, response.usage, _task.get())
 
     if response.stop_reason == "refusal":
         raise LLMError("Permintaan ditolak oleh model.")
@@ -228,7 +262,7 @@ async def _ask_openai_style(provider: str, agent: Agent, prompt: str, schema: di
     if provider == "openrouter":
         await _remember_price(data.get("model") or model)
     cached = (usage.get("prompt_tokens_details") or {}).get("cached_tokens") or 0
-    storage.log_usage(agent.key, data.get("model") or model, SimpleNamespace(
+    storage.log_usage(agent.key, data.get("model") or model, task=_task.get(), usage=SimpleNamespace(
         input_tokens=max((usage.get("prompt_tokens") or 0) - cached, 0),
         output_tokens=usage.get("completion_tokens") or 0,
         cache_read_input_tokens=cached, cache_creation_input_tokens=0,
@@ -303,7 +337,7 @@ def row_cost(row: dict) -> float:
 
 
 def cost_since(since_ts: float) -> tuple[float, list[str]]:
-    """Estimasi biaya AI (USD) sejak waktu tertentu."""
+    """Estimasi biaya AI (USD) sejak waktu tertentu, beserta rincian per model."""
     total = 0.0
     lines = []
     for row in storage.usage_since(since_ts):
@@ -311,6 +345,30 @@ def cost_since(since_ts: float) -> tuple[float, list[str]]:
         total += cost
         lines.append(f"- {row['model']}: ${cost:.2f}")
     return total, lines
+
+
+def usage_report(since_ts: float) -> str:
+    """Rincian pemakaian token per pekerjaan dan per anggota tim (untuk /biaya di Telegram)."""
+    rows = storage.usage_rows_since(since_ts)
+    if not rows:
+        return "Belum ada pemakaian AI pada periode ini."
+    by_task: dict[str, list] = {}
+    by_agent: dict[str, list] = {}
+    for row in rows:
+        cost = row_cost(row)
+        tokens = row["input_tokens"] + row["output_tokens"] + row["cache_read"] + row["cache_write"]
+        for bucket, key in ((by_task, row["task"] or "lainnya"), (by_agent, row["agent"])):
+            item = bucket.setdefault(key, [0, 0.0, 0])  # panggilan, biaya, token
+            item[0] += 1
+            item[1] += cost
+            item[2] += tokens
+    def block(title, bucket, label):
+        top = sorted(bucket.items(), key=lambda kv: -kv[1][1])[:8]
+        return f"{title}:\n" + "\n".join(
+            f"- {label(k)}: ${v[1]:.2f} · {v[0]}x · {v[2]:,} token".replace(",", ".") for k, v in top)
+    from agents import AGENTS as _AGENTS
+    return (block("Per pekerjaan", by_task, lambda k: TASKS.get(k, k)) + "\n\n"
+            + block("Per anggota", by_agent, lambda k: _AGENTS[k].name if k in _AGENTS else k))
 
 
 def start_of_day_ts() -> float:

@@ -179,7 +179,7 @@ async def consolidate(transcript: str, source: str) -> int:
         "kalimat padat, sebut nama campaign di field campaign jika ada (kosongkan jika umum). Jangan mengarang.\n"
         "owner_instructions: HANYA arahan/preferensi baru yang diucapkan Owner sendiri dan berlaku ke depan "
         "(mis. 'jangan naikkan bid di atas $2', 'fokus Indonesia'). Kosongkan jika tidak ada.",
-        schema=SCHEMA,
+        schema=SCHEMA, task="ingatan",
     )
     storage.put(KEY + "_prev", items)  # cadangan jika rangkuman AI keliru
     kept = [n for n in items if n.get("pinned")]

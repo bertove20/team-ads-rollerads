@@ -638,15 +638,38 @@ details.more summary { cursor: pointer; color: var(--accent); font-size: 14px; m
 
     <!-- ================= BIAYA ================= -->
     <section class="page" id="page-biaya">
-      <p class="page-intro">Perkiraan biaya pemakaian Claude AI (bukan biaya iklan). Pengecekan landing page dan perhitungan angka gratis.</p>
+      <p class="page-intro">Rincian pemakaian token AI (bukan biaya iklan), supaya Anda bisa menilai boros atau tidak.
+        Pengecekan landing page, tombol landing page, auto-pause, dan perhitungan angka tidak memakai AI sama sekali (gratis).
+        Angka biaya dihitung dari harga asli tiap model.</p>
       <div class="grid kpi" id="cost-kpi"></div>
+      <div id="cost-tips"></div>
       <div class="card">
         <h2>Biaya AI per hari</h2>
         <p class="sub">30 hari terakhir, dalam USD</p>
         <div class="chart-box short"><canvas id="ch-cost-day"></canvas></div>
       </div>
       <div class="card">
-        <h2>Biaya AI per anggota tim (bulan ini)</h2>
+        <h2>Dipakai untuk apa saja? (7 hari terakhir)</h2>
+        <p class="sub">Inilah yang paling penting untuk menilai boros: pekerjaan mana yang menghabiskan token.</p>
+        <div class="table-wrap"><table id="tb-cost-task"></table></div>
+      </div>
+      <div class="grid two">
+        <div class="card">
+          <h2>Per anggota tim (7 hari)</h2>
+          <div class="table-wrap"><table id="tb-cost-agent"></table></div>
+        </div>
+        <div class="card">
+          <h2>Per model AI (7 hari)</h2>
+          <div class="table-wrap"><table id="tb-cost-model"></table></div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>10 panggilan AI termahal (7 hari)</h2>
+        <p class="sub">Kalau ada satu pekerjaan yang jauh lebih mahal dari lainnya, biasanya di sinilah pemborosannya.</p>
+        <div class="table-wrap"><table id="tb-cost-big"></table></div>
+      </div>
+      <div class="card">
+        <h2>Biaya AI per anggota tim (grafik, bulan ini)</h2>
         <div class="chart-box short"><canvas id="ch-cost-agent"></canvas></div>
       </div>
     </section>
@@ -1706,11 +1729,41 @@ $("#lp-run").onclick = e => withBusy(e.currentTarget, async () => {
   await refresh();
 });
 
+const tok = n => n >= 1e6 ? (n / 1e6).toFixed(2) + " jt" : n >= 1e3 ? (n / 1e3).toFixed(1) + " rb" : num(n);
+const cost4 = n => "$" + (n || 0).toFixed(n && n < 0.01 ? 4 : 2);
+
+function costTable(rows, firstHeader) {
+  const total = rows.reduce((s, r) => s + r.cost, 0) || 1;
+  return rows.length ? `<thead><tr><th>${firstHeader}</th><th class="num">Panggilan</th><th class="num">Token masuk</th>
+    <th class="num">Token keluar</th><th class="num">Biaya</th><th class="num">Rata-rata</th><th class="num">Porsi</th></tr></thead>
+    <tbody>${rows.map(r => `<tr><td><b>${esc(r.name)}</b>${r.models ? `<div class="sub" style="margin:0">${esc(r.models)}</div>` : ""}</td>
+      <td class="num">${num(r.calls)}</td><td class="num">${tok(r.input)}${r.cache_read ? `<div class="sub" style="margin:0">+${tok(r.cache_read)} cache</div>` : ""}</td>
+      <td class="num">${tok(r.output)}</td><td class="num">${cost4(r.cost)}</td><td class="num">${cost4(r.per_call)}</td>
+      <td class="num">${(r.cost / total * 100).toFixed(0)}%</td></tr>`).join("")}</tbody>`
+    : `<tbody><tr><td class="empty">Belum ada pemakaian AI dalam 7 hari terakhir.</td></tr></tbody>`;
+}
+
 PAGES.biaya = async () => {
   const data = await api("/api/costs");
+  const t = data.totals;
   $("#cost-kpi").innerHTML = [
-    ["Hari ini", money(ov.ai_cost.today)], ["Bulan ini", money(ov.ai_cost.month)], ["Model AI", esc(data.model)],
-  ].map(([l, v]) => `<div class="tile"><div class="label">${l}</div><div class="value" style="font-size:${l === "Model AI" ? "18px" : ""}">${v}</div></div>`).join("");
+    ["Hari ini", cost4(t.today), "biaya AI"],
+    ["7 hari terakhir", cost4(t.week), `${num(data.tokens.calls)} panggilan · ${tok(data.tokens.input + data.tokens.output + data.tokens.cache_read)} token`],
+    ["Bulan ini", cost4(t.month), `perkiraan sebulan penuh ${cost4(data.projection_month)}`],
+    ["Porsi dari biaya iklan", data.share_of_spend === null ? "–" : data.share_of_spend + "%",
+      data.ad_spend ? `iklan ${money(data.ad_spend)} / 7 hari` : "belum ada data iklan"],
+    ["Biaya AI per konversi", data.per_conversion === null ? "–" : cost4(data.per_conversion),
+      `${num(data.conversions)} konversi / 7 hari`],
+  ].map(([l, v, n]) => `<div class="tile"><div class="label">${l}</div><div class="value">${v}</div><div class="note">${esc(n)}</div></div>`).join("");
+  $("#cost-tips").innerHTML = data.tips.length
+    ? `<div class="banner info"><strong>Penilaian & cara menghemat</strong><ul style="margin:4px 0 0;padding-left:18px">${data.tips.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>` : "";
+  $("#tb-cost-task").innerHTML = costTable(data.by_task, "Pekerjaan");
+  $("#tb-cost-agent").innerHTML = costTable(data.by_agent, "Anggota tim");
+  $("#tb-cost-model").innerHTML = costTable(data.by_model, "Model");
+  $("#tb-cost-big").innerHTML = data.biggest.length ? `<thead><tr><th>Waktu</th><th>Pekerjaan</th><th>Anggota</th><th>Model</th><th class="num">Token</th><th class="num">Biaya</th></tr></thead>
+    <tbody>${data.biggest.map(b => `<tr><td>${timeFmt(b.ts)}</td><td>${esc(b.task)}</td><td>${esc(b.agent)}</td>
+      <td>${esc(b.model)}</td><td class="num">${tok(b.tokens)}</td><td class="num">${cost4(b.cost)}</td></tr>`).join("")}</tbody>`
+    : `<tbody><tr><td class="empty">Belum ada pemakaian AI.</td></tr></tbody>`;
   const labels = data.by_day.map(d => new Date(d.label + "T00:00:00").toLocaleDateString("id-ID", {day: "2-digit", month: "short"}));
   unhide("ch-cost-day");
   const o1 = chartBase();

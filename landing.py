@@ -259,7 +259,7 @@ async def _develop(lp_id: str, record: dict, copy: dict, click: str) -> dict:
         for _ in range(2):
             try:
                 draft = await llm.ask(dev, _dev_prompt(record, copy, click, previous, feedback), schema=HTML_SCHEMA,
-                                      provider=provider, fallback=False)
+                                      provider=provider, fallback=False, task="landing")
             except llm.LLMError as e:
                 _log(lp_id, f"{llm.provider_name(provider)} gagal: {str(e)[:200]}")
                 break
@@ -272,7 +272,8 @@ async def _develop(lp_id: str, record: dict, copy: dict, click: str) -> dict:
                 continue
             _log(lp_id, f"Lolos cek otomatis. {llm.label(qa)} memeriksa…")
             try:
-                review, checker = await llm.ask_ex(qa, _review_prompt(record, copy, click, page), schema=REVIEW_SCHEMA)
+                review, checker = await llm.ask_ex(qa, _review_prompt(record, copy, click, page),
+                                                   schema=REVIEW_SCHEMA, task="landing")
             except llm.LLMError as e:
                 return {**attempt, "passed": None, "issues": [f"QA tidak bisa memeriksa: {str(e)[:200]}"],
                         "summary": "Belum diperiksa QA.", "checker": ""}
@@ -314,7 +315,8 @@ async def build(team: Team, lp_id: str, feedback: str = "") -> None:
         digest = tracking.digest(page.get("html", ""), 8000) if page["ok"] else ""
         _log(lp_id, f"{llm.label(creative)} menulis isi…")
         try:
-            copy, writer = await llm.ask_ex(creative, _copy_prompt(record, digest, feedback), schema=COPY_SCHEMA)
+            copy, writer = await llm.ask_ex(creative, _copy_prompt(record, digest, feedback),
+                                            schema=COPY_SCHEMA, task="landing")
         except llm.LLMError as e:
             _update(lp_id, status="failed", summary=f"Creative gagal: {str(e)[:200]}")
             await team.send("creative", "kreatif", f"⚠️ Landing page #{lp_id} gagal: Creative tidak bisa menulis isi ({e}).")

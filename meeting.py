@@ -181,7 +181,7 @@ async def run_meeting(team: Team, reason: str) -> None:
                     + ("\n\n".join(transcript) or "(belum ada)")
                     + f"\n\nGILIRAN ANDA ({agent.name}). {instruction}"
                 )
-                reply = await llm.ask(agent, prompt)
+                reply = await llm.ask(agent, prompt, task="rapat")
                 transcript.append(f"{agent.name}: {reply}")
                 await team.send(agent_key, "diskusi", reply)
 
@@ -193,7 +193,7 @@ async def run_meeting(team: Team, reason: str) -> None:
                 "nama campaign persis seperti di data. Untuk create_lander isi website (host dari Status tracking) "
                 "dan brief (ide landing page). Isi field yang tidak relevan dengan string "
                 "kosong, list kosong, atau 0. Jika tidak ada tindakan, kembalikan list kosong.",
-                schema=PROPOSAL_SCHEMA,
+                schema=PROPOSAL_SCHEMA, task="rapat",
             )
         except llm.LLMError as e:
             await team.send(LEADER, "alert", f"Rapat terhenti karena masalah AI: {e}")

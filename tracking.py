@@ -387,7 +387,7 @@ async def _make(team: Team, record: dict, page_digest: str, postback: str) -> di
         for _ in range(2):
             try:
                 draft = await llm.ask(dev, _maker_prompt(record, page_digest, postback, previous, feedback),
-                                      schema=KIT_SCHEMA, provider=provider, fallback=False)
+                                      schema=KIT_SCHEMA, provider=provider, fallback=False, task="script")
             except llm.LLMError as e:
                 reason = str(e)[:200]
                 _log(host, f"{llm.provider_name(provider)} gagal: {reason}")
@@ -403,7 +403,7 @@ async def _make(team: Team, record: dict, page_digest: str, postback: str) -> di
             _log(host, f"Lolos cek otomatis. {llm.label(qa)} memeriksa kode…")
             try:
                 review, checker = await llm.ask_ex(qa, _review_prompt(record, page_digest, postback, code, syntax_note),
-                                                   schema=REVIEW_SCHEMA)
+                                                   schema=REVIEW_SCHEMA, task="script")
             except llm.LLMError as e:
                 _log(host, f"QA tidak bisa memeriksa: {e}")
                 return {**attempt, "review": {"ok": None, "issues": [f"QA tidak bisa memeriksa: {str(e)[:200]}"],
@@ -737,7 +737,7 @@ async def test(team: Team, host: str, *, ai: bool = True, announce: bool = True)
                 qa, f"Hasil tes koneksi tracking untuk {host}:\n{lines}{extra}\n\n"
                     f"Langkah tes manual dari review kode: {'; '.join(kit.get('test_steps', [])) or '-'}\n\n"
                     "Tulis kesimpulan untuk Owner: sudah terhubung atau belum, apa yang salah, dan langkah berikutnya "
-                    "(termasuk tes manual daftar/deposit jika semua cek otomatis lolos).", max_tokens=2000)
+                    "(termasuk tes manual daftar/deposit jika semua cek otomatis lolos).", max_tokens=2000, task="script")
             checker = llm.label(qa, provider)
         except llm.LLMError as e:
             summary = f"QA tidak bisa membuat kesimpulan: {e}"

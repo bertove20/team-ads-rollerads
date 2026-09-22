@@ -219,24 +219,112 @@ async def checks_view(request: web.Request) -> web.Response:
     })
 
 
+def _blank() -> dict:
+    return {"calls": 0, "input": 0, "output": 0, "cache_read": 0, "cost": 0.0, "models": set()}
+
+
+def _add(bucket: dict, row: dict, cost: float) -> None:
+    bucket["calls"] += 1
+    bucket["input"] += row["input_tokens"] + row["cache_write"]
+    bucket["output"] += row["output_tokens"]
+    bucket["cache_read"] += row["cache_read"]
+    bucket["cost"] += cost
+    bucket["models"].add(row["model"])
+
+
+def _rows(buckets: dict, label_of=lambda k: k) -> list[dict]:
+    out = []
+    for key, b in buckets.items():
+        out.append({"key": key, "name": label_of(key), "calls": b["calls"], "input": b["input"],
+                    "output": b["output"], "cache_read": b["cache_read"], "cost": round(b["cost"], 4),
+                    "per_call": round(b["cost"] / b["calls"], 4) if b["calls"] else 0,
+                    "tokens": b["input"] + b["output"] + b["cache_read"],
+                    "models": ", ".join(sorted(m.split("/")[-1] for m in b["models"]))})
+    return sorted(out, key=lambda x: -x["cost"])
+
+
 @routes.get("/api/costs")
 async def costs(request: web.Request) -> web.Response:
-    since = time.time() - 30 * 86400
+    """Laporan rinci pemakaian token AI: per hari, per tugas, per agent, per model, + penilaian boros/hemat."""
+    now = time.time()
+    rows = storage.usage_rows_since(now - 30 * 86400)
     by_day: dict[str, float] = defaultdict(float)
-    by_agent: dict[str, float] = defaultdict(float)
-    month_start = llm.start_of_month_ts()
-    for row in storage.usage_rows_since(since):
+    tokens_day: dict[str, int] = defaultdict(int)
+    by_task, by_agent, by_model = defaultdict(_blank), defaultdict(_blank), defaultdict(_blank)
+    totals = {"today": 0.0, "week": 0.0, "month": 0.0, "all30": 0.0}
+    tok = {"input": 0, "output": 0, "cache_read": 0, "calls": 0}
+    month_start, day_start = llm.start_of_month_ts(), llm.start_of_day_ts()
+    biggest = []
+    for row in rows:
         cost = llm.row_cost(row)
-        by_day[local_time(row["ts"]).date().isoformat()] += cost
+        day = local_time(row["ts"]).date().isoformat()
+        by_day[day] += cost
+        tokens_day[day] += row["input_tokens"] + row["output_tokens"] + row["cache_read"] + row["cache_write"]
+        totals["all30"] += cost
         if row["ts"] >= month_start:
-            name = AGENTS[row["agent"]].name if row["agent"] in AGENTS else row["agent"]
-            by_agent[name] += cost
+            totals["month"] += cost
+        if row["ts"] >= day_start:
+            totals["today"] += cost
+        if row["ts"] >= now - 7 * 86400:  # rincian = 7 hari terakhir
+            totals["week"] += cost
+            _add(by_task[row["task"] or "lainnya"], row, cost)
+            _add(by_agent[row["agent"]], row, cost)
+            _add(by_model[row["model"] or "-"], row, cost)
+            tok["input"] += row["input_tokens"] + row["cache_write"]
+            tok["output"] += row["output_tokens"]
+            tok["cache_read"] += row["cache_read"]
+            tok["calls"] += 1
+            biggest.append({"ts": row["ts"], "agent": AGENTS[row["agent"]].name if row["agent"] in AGENTS
+                            else row["agent"], "task": llm.TASKS.get(row["task"] or "lainnya", row["task"]),
+                            "model": (row["model"] or "").split("/")[-1],
+                            "tokens": row["input_tokens"] + row["output_tokens"] + row["cache_read"] + row["cache_write"],
+                            "cost": round(cost, 4)})
+
     today = dt.datetime.now(config.TIMEZONE).date()
     days = [(today - dt.timedelta(days=i)).isoformat() for i in range(29, -1, -1)]
+    task_rows = _rows(by_task, lambda k: llm.TASKS.get(k or "lainnya", k or "lainnya"))
+    agent_rows = _rows(by_agent, lambda k: AGENTS[k].name if k in AGENTS else k)
+
+    # Pembanding: biaya iklan & konversi 7 hari terakhir (dari riwayat harian)
+    week_days = {(today - dt.timedelta(days=i)).isoformat() for i in range(0, 7)}
+    snaps = [d for d in storage.daily_snapshots(10) if d["day"] in week_days]
+    ad_spend = sum(d["total"].get("cost", 0) for d in snaps)
+    conversions = sum(d["total"].get("conversions", 0) for d in snaps)
+    share = (totals["week"] / ad_spend * 100) if ad_spend else None
+
+    tips = []
+    if task_rows and totals["week"]:
+        top = task_rows[0]
+        if top["cost"] / totals["week"] > 0.45:
+            tips.append(f"{top['name']} memakan {top['cost'] / totals['week'] * 100:.0f}% biaya AI minggu ini "
+                        f"(${top['cost']:.2f}). " + ("Kurangi jadwal rapat di Pengaturan → Jadwal jika terasa boros."
+                                                     if top["key"] == "rapat" else "Pertimbangkan model lebih murah "
+                                                     "untuk tugas ini di Pengaturan → Penyedia AI."))
+    for a in agent_rows[:3]:
+        if a["per_call"] > 0.10 and a["calls"] >= 3:
+            tips.append(f"{a['name']} rata-rata ${a['per_call']:.3f} per panggilan ({a['models']}). Model lebih murah "
+                        "bisa dipakai jika tugasnya tidak berat.")
+    if share is not None and share > 10:
+        tips.append(f"Biaya AI = {share:.0f}% dari biaya iklan minggu ini. Di atas 10% biasanya tanda boros: "
+                    "kurangi rapat, pakai model murah untuk Analyst/Tracking, atau kurangi pertanyaan berulang.")
+    elif share is not None and ad_spend:
+        tips.append(f"Biaya AI = {share:.1f}% dari biaya iklan minggu ini (${ad_spend:.2f}). Masih wajar (di bawah 10%).")
+    if tok["cache_read"] and tok["input"]:
+        saved = tok["cache_read"] / (tok["input"] + tok["cache_read"]) * 100
+        tips.append(f"{saved:.0f}% teks yang dikirim ulang terbaca dari cache (lebih murah 90%).")
+
     return web.json_response({
-        "by_day": [{"label": d, "cost": round(by_day.get(d, 0), 4)} for d in days],
-        "by_agent": sorted(({"name": k, "cost": round(v, 4)} for k, v in by_agent.items()),
-                           key=lambda x: -x["cost"]),
+        "by_day": [{"label": d, "cost": round(by_day.get(d, 0), 4), "tokens": tokens_day.get(d, 0)} for d in days],
+        "by_task": task_rows, "by_agent": agent_rows,
+        "by_model": _rows(by_model, lambda k: k),
+        "totals": {k: round(v, 4) for k, v in totals.items()},
+        "tokens": tok,
+        "biggest": sorted(biggest, key=lambda x: -x["cost"])[:10],
+        "ad_spend": round(ad_spend, 2), "conversions": conversions,
+        "share_of_spend": None if share is None else round(share, 2),
+        "per_conversion": round(totals["week"] / conversions, 4) if conversions else None,
+        "projection_month": round(totals["week"] / 7 * 30, 2),
+        "tips": tips,
         "model": ", ".join(sorted({llm.provider_name(config.agent_provider(k)) for k in AGENTS})),
     })
 

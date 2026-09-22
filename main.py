@@ -433,9 +433,13 @@ async def cmd_testracking(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 @owner_only
 async def cmd_biaya(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     today, _ = llm.cost_since(llm.start_of_day_ts())
+    week, _ = llm.cost_since(time.time() - 7 * 86400)
     month, lines = llm.cost_since(llm.start_of_month_ts())
     await update.effective_message.reply_text(
-        f"Estimasi biaya Claude API\nHari ini: ${today:.2f}\nBulan ini: ${month:.2f}\n" + "\n".join(lines)
+        f"💰 Pemakaian AI\nHari ini: ${today:.2f}\n7 hari: ${week:.2f} (perkiraan sebulan ${week / 7 * 30:.2f})\n"
+        f"Bulan ini: ${month:.2f}\n\nPer model bulan ini:\n" + "\n".join(lines)
+        + f"\n\n=== 7 HARI TERAKHIR ===\n{llm.usage_report(time.time() - 7 * 86400)}"
+        + "\n\nRincian lengkap ada di dashboard → 💰 Biaya AI."
     )
 
 

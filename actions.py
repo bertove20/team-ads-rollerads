@@ -218,7 +218,7 @@ async def draft_campaign(brief: str) -> dict:
         "landing page yang dipantau jika link BeMob juga tidak ada (URL campaign sebaiknya link BeMob supaya "
         "konversi terlacak). "
         "Jangan mengarang URL. Tulis alasan singkat di field reason.",
-        schema=rollerads.SPEC_SCHEMA,
+        schema=rollerads.SPEC_SCHEMA, task="campaign",
     )
 
 
@@ -260,7 +260,7 @@ async def ask_agent(agent_key: str, who: str, thread_id: int | None = None) -> s
         f"Jawab pesan terakhir dari Owner ({who}) sebagai {agent.name}. Sambungkan dengan pembahasan, keputusan, "
         "dan arahan Owner sebelumnya bila relevan (jangan bertanya ulang hal yang sudah pernah dijawab Owner)."
     )
-    return await llm.ask(agent, prompt)
+    return await llm.ask(agent, prompt, task="tanya")
 
 
 async def creative_ideas(brief: str) -> str:
@@ -269,6 +269,7 @@ async def creative_ideas(brief: str) -> str:
         f"{storage.get('last_facts') or ''}\n\nBrief dari Owner: {brief}\n\n"
         "Buat 5 variasi iklan push/in-page push (judul maks 30 karakter, deskripsi maks 45 "
         "karakter, ide ikon/gambar), lalu 1 ide A/B test untuk landing page.",
+        task="kreatif",
     )
 
 
@@ -285,4 +286,5 @@ async def daily_report() -> str:
         "(yang belum terpasang, belum terhubung, atau menunggu di-upload Owner), (7) hal yang perlu keputusan "
         "atau tindakan Owner (usulan menunggu, script untuk ditempel, tugas manual). Data 'hari ini' baru "
         "sebagian hari, jangan dijadikan kesimpulan.",
+        task="laporan",
     )

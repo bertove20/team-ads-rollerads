@@ -33,9 +33,11 @@ _db.executescript(
     );
     """
 )
-# Kolom `topic` ditambahkan belakangan; database lama di-upgrade otomatis.
+# Kolom `topic` & `task` ditambahkan belakangan; database lama di-upgrade otomatis.
 if "topic" not in {r["name"] for r in _db.execute("PRAGMA table_info(chat_log)")}:
     _db.execute("ALTER TABLE chat_log ADD COLUMN topic TEXT")
+if "task" not in {r["name"] for r in _db.execute("PRAGMA table_info(usage)")}:
+    _db.execute("ALTER TABLE usage ADD COLUMN task TEXT")  # jenis pekerjaan, mis. rapat / script tracking
 _db.commit()
 
 
@@ -162,9 +164,10 @@ def recent_chat(thread_id: int | None, limit: int = 20) -> list[dict]:
 
 
 # --- biaya AI ---
-def log_usage(agent: str, model: str, usage) -> None:
+def log_usage(agent: str, model: str, usage, task: str = "") -> None:
     _db.execute(
-        "INSERT INTO usage VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO usage (ts, agent, model, input_tokens, output_tokens, cache_read, cache_write, task) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         (
             time.time(),
             agent,
@@ -173,6 +176,7 @@ def log_usage(agent: str, model: str, usage) -> None:
             usage.output_tokens or 0,
             getattr(usage, "cache_read_input_tokens", 0) or 0,
             getattr(usage, "cache_creation_input_tokens", 0) or 0,
+            task or "lainnya",
         ),
     )
     _db.commit()

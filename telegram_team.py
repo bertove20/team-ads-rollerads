@@ -1,9 +1,10 @@
 """Mengelola bot-bot Telegram milik para agent dan topic di grup."""
+import asyncio
 import logging
 import os
 
 from telegram import Bot, InlineKeyboardMarkup, InputFile, LinkPreviewOptions, Message, ReplyParameters
-from telegram.error import TelegramError
+from telegram.error import RetryAfter, TelegramError
 
 import config
 import storage
@@ -17,6 +18,20 @@ MAX_MESSAGE_LEN = 4000
 def topic_id(topic: str) -> int | None:
     """ID thread topic, atau None (topic General) jika /setup belum dijalankan."""
     return storage.get("topics", {}).get(topic)
+
+
+async def _with_retry(send, attempts: int = 4):
+    """Telegram membatasi ±20 pesan/menit per bot di grup. Jika kena batas (RetryAfter), tunggu sesuai
+    permintaan Telegram lalu kirim ulang, supaya pesan (termasuk tombol persetujuan) tidak hilang."""
+    for attempt in range(attempts):
+        try:
+            return await send()
+        except RetryAfter as e:
+            if attempt == attempts - 1:
+                raise
+            wait = e.retry_after if isinstance(e.retry_after, (int, float)) else e.retry_after.total_seconds()
+            log.warning("Telegram membatasi pengiriman, menunggu %.0f detik", wait)
+            await asyncio.sleep(wait + 1)
 
 
 def _split(text: str) -> list[str]:
@@ -96,7 +111,7 @@ class Team:
         chunks = _split(body)
         try:
             for i, chunk in enumerate(chunks):
-                message = await bot.send_message(
+                message = await _with_retry(lambda: bot.send_message(
                     chat_id=config.GROUP_ID,
                     text=chunk,
                     message_thread_id=thread_id,
@@ -107,7 +122,7 @@ class Team:
                         else None
                     ),
                     link_preview_options=LinkPreviewOptions(is_disabled=True),
-                )
+                ))
         except TelegramError as e:
             log.error("Gagal kirim pesan %s ke topic %s: %s", agent.name, topic, e)
             if not use_leader:  # coba lagi lewat bot leader
@@ -129,12 +144,12 @@ class Team:
         if use_leader and agent_key != LEADER:
             caption = f"{agent.label}:\n{caption}"
         try:
-            await bot.send_document(
+            await _with_retry(lambda: bot.send_document(
                 chat_id=config.GROUP_ID,
                 document=InputFile(content.encode("utf-8"), filename=filename),
                 caption=caption[:1000] or None,
                 message_thread_id=topic_id(topic),
-            )
+            ))
         except TelegramError as e:
             log.error("Gagal kirim file %s dari %s: %s", filename, agent.name, e)
 
